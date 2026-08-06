@@ -1,0 +1,18 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+
+# Scratch / Dev files
+scratch/
+user_inputs*.txt
+
+# Local data directories
+borgguard/
+borgmatic/

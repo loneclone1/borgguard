@@ -1,0 +1,60 @@
+services:
+  borgguard:
+    build: .
+    container_name: borgguard
+    hostname: borgguard
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    volumes:
+      # ─── Konfiguration ───
+      - ./restic.yaml:/etc/restic.yaml:ro
+
+      # ─── SSH-Keys (optional für Remote-Backups) ───
+      - /root/.ssh:/root/.ssh:ro
+
+      # ─── rclone Configuration (für Google Drive Sync) ───
+      - /home/jb/.config/rclone:/root/.config/rclone
+
+      # ─── Docker-Socket (für Container-Status + docker exec in Hooks) ───
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # ─── Docker Compose Projects (für Update-Funktion) ───
+      - /home/jb:/home/jb:ro
+      - /home/jb/immich-kiosk/config:/home/jb/immich-kiosk/config:rw
+
+      # ─── Backup-Quellverzeichnisse (read-only in den Container gemountet) ───
+      # Immich
+      - /home/jb/immich-app:/home/jb/immich-app:ro
+      - /mnt/immich_extern:/mnt/immich_extern:ro
+      - /mnt/immich_old:/mnt/immich_old:ro
+      # Nextcloud
+      - /mnt/nxt_data:/mnt/nxt_data:ro
+      - /home/jb/nextcloud-data/config:/home/jb/nextcloud-data/config:ro
+      - /home/jb/nextcloud-data/app:/home/jb/nextcloud-data/app:ro
+
+      # ─── Persistente Logs ───
+      - borgguard-logs:/app/logs
+    environment:
+      # Dashboard-Zugangsdaten (werden aus der .env Datei geladen)
+      - DASHBOARD_USER=${DASHBOARD_USER}
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
+      # Pfad zur Restic-Konfiguration
+      - RESTIC_CONFIG=/etc/restic.yaml
+      # Restic Repository via rclone
+      - RESTIC_REPOSITORY=rclone:gdrive:BorgGuard-Restic
+      # Restic-Passwort (aus der .env Datei)
+      - RESTIC_PASSWORD=${RESTIC_PASSWORD}
+      # ntfy Push-Benachrichtigungen (https://ntfy.sh)
+      - NTFY_ENABLED=true
+      - NTFY_URL=https://ntfy.sh
+      - NTFY_TOPIC=borgguard-backup
+    networks:
+      - borgguard-net
+
+networks:
+  borgguard-net:
+    driver: bridge
+
+volumes:
+  borgguard-logs:

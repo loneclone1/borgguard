@@ -1,0 +1,25 @@
+source_directories:
+  - /home/jb/immich-app
+  - /mnt/immich_extern
+  - /mnt/immich_old
+  - /mnt/nxt_data
+  - /home/jb/nextcloud-data/config
+  - /home/jb/nextcloud-data/app
+  - /tmp/borgmatic-dumps
+
+before_backup:
+  - echo "=== Backup gestartet ==="
+  - mkdir -p /tmp/borgmatic-dumps
+  - docker exec immich_postgres pg_dumpall -U postgres > /tmp/borgmatic-dumps/immich_db.sql
+  - docker exec nextcloud_db pg_dumpall -U nextcloud > /tmp/borgmatic-dumps/nextcloud_db.sql
+  - docker exec -u www-data nextcloud_app php occ maintenance:mode --on
+
+after_backup:
+  - docker exec -u www-data nextcloud_app php occ maintenance:mode --off
+  - rm -rf /tmp/borgmatic-dumps
+  - echo "=== Backup abgeschlossen ==="
+
+on_error:
+  - docker exec -u www-data nextcloud_app php occ maintenance:mode --off || true
+  - rm -rf /tmp/borgmatic-dumps || true
+  - echo "!!! BACKUP FEHLGESCHLAGEN !!!"

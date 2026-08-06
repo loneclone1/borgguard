@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="RestiGuard by JB – Backup-Management-Dashboard für Restic. Überwache und steuere deine Restic-Backups.">
+    <title>RestiGuard by JB – Backup Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" type="image/png" href="/static/icon.png">
+    <link rel="apple-touch-icon" href="/static/icon.png">
+    <script>
+        // Dynamic cache-busting: append build timestamp to static assets
+        (function() {
+            var ts = '__BORGGUARD_BUILD__';
+            document.querySelectorAll('link[rel="stylesheet"]').forEach(function(el) {
+                if (el.href.includes('/static/')) el.href = el.href.split('?')[0] + '?v=' + ts;
+            });
+        })();
+        // Token for WebSocket authentication
+        var BORGGUARD_WS_TOKEN = '__BORGGUARD_WS_TOKEN__';
+    </script>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <div class="app-container">
+        <!-- ─── Header ──────────────────────────────────────────────── -->
+        <header class="app-header" id="app-header">
+            <div class="app-logo">
+                <img src="/static/icon.png" alt="RestiGuard by JB" class="app-icon">
+                <div>
+                    <h1>RestiGuard <span style="font-size: 0.55em; font-weight: normal; opacity: 0.85;">by JB</span></h1>
+                    <div class="tagline">Backup Management Dashboard</div>
+                </div>
+            </div>
+            <div class="header-status">
+                <span class="last-update" id="last-update">Wird geladen…</span>
+                <button class="refresh-btn" id="refresh-btn" onclick="BorgGuard.refresh()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    Aktualisieren
+                </button>
+            </div>
+        </header>
+
+        <!-- ─── Progress Panel (replaces old job-banner) ─────────────── -->
+        <div class="progress-panel" id="progress-panel">
+            <div class="progress-header">
+                <div class="progress-header-left">
+                    <div class="spinner"></div>
+                    <span class="progress-job-type" id="progress-job-type">Backup</span>
+                    <span class="progress-phase" id="progress-phase">Wird gestartet…</span>
+                </div>
+                <span class="progress-percent" id="progress-percent"></span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="progress-detail" id="progress-detail" style="display:none;"></div>
+            <div class="progress-log" id="progress-log" style="display:none;"></div>
+        </div>
+
+        <!-- ─── Status Cards ────────────────────────────────────────── -->
+        <section class="status-grid" id="status-grid">
+            <!-- Last Backup -->
+            <div class="status-card" id="card-lastbackup">
+                <div class="card-header">
+                    <div class="card-icon cyan">🕐</div>
+                    <span class="card-label">Letzter Snapshot</span>
+                </div>
+                <div class="card-value" id="last-backup-time">
+                    <div class="skeleton skeleton-large"></div>
+                </div>
+                <div class="card-detail" id="last-backup-detail">Wird geladen…</div>
+            </div>
+
+            <!-- Snapshot Count -->
+            <div class="status-card clickable" id="card-archives" onclick="BorgGuard.openSnapshotsModal()" title="Alle Snapshots anzeigen">
+                <div class="card-header">
+                    <div class="card-icon purple">📦</div>
+                    <span class="card-label">Snapshots</span>
+                </div>
+                <div class="card-value" id="archive-count">
+                    <div class="skeleton skeleton-large"></div>
+                </div>
+                <div class="card-detail" id="archive-detail">Gespeicherte Snapshots</div>
+            </div>
+
+            <!-- Google Drive Speicher (clickable link to Google Drive) -->
+            <div class="status-card clickable" id="card-storage" onclick="BorgGuard.openGoogleDrive()" title="Google Drive Speicherverzeichnis in neuem Tab öffnen">
+                <div class="card-header">
+                    <div class="card-icon green">☁️</div>
+                    <span class="card-label">Google Drive Speicher</span>
+                </div>
+                <div class="card-value" id="storage-size">
+                    <div class="skeleton skeleton-large"></div>
+                </div>
+                <div class="card-detail" id="storage-detail">In Google Drive öffnen ↗</div>
+            </div>
+
+            <!-- Services -->
+            <div class="status-card" id="card-services">
+                <div class="card-header">
+                    <div class="card-icon orange">🐳</div>
+                    <span class="card-label">Dienste</span>
+                </div>
+                <div class="card-value" id="services-status">
+                    <div class="skeleton skeleton-large"></div>
+                </div>
+                <div class="card-detail" id="services-detail">Container-Status</div>
+            </div>
+        </section>
+
+        <!-- ─── Actions Panel ───────────────────────────────────────── -->
+        <section class="actions-panel" id="actions-panel">
+            <h2>⚡ Aktionen</h2>
+            <div class="actions-grid">
+                <button class="action-btn primary" id="btn-backup" onclick="BorgGuard.triggerBackup()">
+                    <span class="btn-icon">▶️</span>
+                    Backup erstellen
+                </button>
+                <button class="action-btn secondary" id="btn-check" onclick="BorgGuard.triggerCheck()">
+                    <span class="btn-icon">🔍</span>
+                    Integrität prüfen
+                </button>
+                <button class="action-btn warning" id="btn-prune" onclick="BorgGuard.triggerPrune()">
+                    <span class="btn-icon">🧹</span>
+                    Alte Snapshots bereinigen
+                </button>
+                <button class="action-btn" id="btn-schedule" onclick="BorgGuard.openSchedule()">
+                    <span class="btn-icon">⏰</span>
+                    Automatische Backups
+                </button>
+                <button class="action-btn" id="btn-config" onclick="BorgGuard.openConfig()">
+                    <span class="btn-icon">⚙️</span>
+                    Konfiguration ansehen
+                </button>
+                <button class="action-btn" id="btn-kiosk" onclick="BorgGuard.openKioskModal()">
+                    <span class="btn-icon">🖼️</span>
+                    Immich Kiosk Config
+                </button>
+                <button class="action-btn danger" id="btn-break-lock" onclick="BorgGuard.triggerBreakLock()" style="background-color: #ef4444; color: white; border-color: #ef4444;">
+                    <span class="btn-icon">🔓</span>
+                    Restic-Sperre (Lock) aufheben
+                </button>
+            </div>
+        </section>
+
+        <!-- ─── Panels Grid ─────────────────────────────────────────── -->
+        <div class="panel-grid">
+
+            <!-- Services Panel -->
+            <div class="panel" id="panel-services">
+                <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <h2><span class="icon">🐳</span> Dienste</h2>
+                </div>
+                <div class="panel-body" id="services-body">
+                    <div class="empty-state">
+                        <div class="empty-icon">⏳</div>
+                        <p>Wird geladen…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── Logs Panel (full width) ─────────────────────────────── -->
+        <div class="panel panel-full" id="panel-logs">
+            <div class="panel-header">
+                <h2><span class="icon">📜</span> Logs</h2>
+                <div class="tab-bar" id="log-tabs">
+                    <button class="tab-btn active" data-tab="system" onclick="BorgGuard.switchLogTab('system')">Backup-Logs</button>
+                    <button class="tab-btn" data-tab="jobs" onclick="BorgGuard.switchLogTab('jobs')">Job-Details</button>
+                </div>
+            </div>
+            <div class="panel-body" style="max-height: 350px;">
+                <div class="tab-content active" id="tab-system">
+                    <div class="log-viewer" id="log-system">Logs werden geladen…</div>
+                </div>
+                <div class="tab-content" id="tab-jobs">
+                    <div class="log-viewer" id="log-jobs">Noch keine Job-Logs verfügbar.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── Footer ──────────────────────────────────────────────── -->
+        <footer class="app-footer">
+            RestiGuard by JB v1.1 · Restic Backup Dashboard
+        </footer>
+    </div>
+
+    <!-- ─── Modals ──────────────────────────────────────────────────────── -->
+    <!-- Config Modal -->
+    <div class="modal-overlay" id="config-modal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>⚙️ Konfiguration & Zeitplan</h2>
+                <button class="close-btn" onclick="BorgGuard.closeConfig()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="config-schedule" id="config-schedule">
+                    <strong>📅 Sicherungsintervall:</strong> Wird berechnet…
+                </div>
+                <div class="log-viewer" id="config-content">Lade Konfiguration...</div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Schedule Modal -->
+    <div class="modal-overlay" id="schedule-modal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>⏰ Automatische Backups</h2>
+                <button class="close-btn" onclick="BorgGuard.closeSchedule()">✕</button>
+            </div>
+            <div class="modal-body" id="schedule-modal-content">
+                <!-- Status Info -->
+                <div class="schedule-info" id="schedule-info">
+                    <div class="schedule-info-row">Wird geladen…</div>
+                </div>
+
+                <!-- Toggle -->
+                <div class="schedule-toggle-row">
+                    <span>Automatische Backups aktivieren</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="schedule-toggle" onchange="BorgGuard.toggleSchedule()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Presets -->
+                <div class="schedule-section">
+                    <label class="section-label">Zeitplan wählen</label>
+                    <div class="preset-grid" id="schedule-presets">
+                        <!-- Dynamically rendered -->
+                    </div>
+                </div>
+
+                <!-- Custom Cron -->
+                <div class="schedule-section">
+                    <div class="schedule-toggle-row compact">
+                        <span>Benutzerdefinierter Cron-Ausdruck</span>
+                        <label class="toggle-switch small">
+                            <input type="checkbox" id="schedule-custom-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <input type="text" class="cron-input" id="schedule-custom-cron" placeholder="z.B. 0 3 * * *" spellcheck="false">
+                    <div class="cron-help">Format: Minute Stunde Tag Monat Wochentag</div>
+                </div>
+
+                <!-- Options -->
+                <div class="schedule-section">
+                    <label class="section-label">Optionen</label>
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="schedule-auto-prune">
+                        <span>Nach Backup automatisch bereinigen (Prune + Compact)</span>
+                    </label>
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="schedule-auto-check">
+                        <span>Wöchentliche Integritätsprüfung</span>
+                    </label>
+                </div>
+
+                <!-- Save Button -->
+                <div class="schedule-actions">
+                    <button class="action-btn primary" onclick="BorgGuard.saveSchedule()" style="width:100%;justify-content:center;">
+                        <span class="btn-icon">💾</span>
+                        Zeitplan speichern
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Storage Modal -->
+    <div class="modal-overlay" id="storage-modal" style="display: none;">
+        <div class="modal modal-large">
+            <div class="modal-header">
+                <h2>🗄️ Sicherungsorte & Speicher</h2>
+                <button class="close-btn" onclick="BorgGuard.closeStorage()">✕</button>
+            </div>
+            <div class="modal-body" id="storage-modal-content" style="max-height: 65vh; overflow-y: auto;">
+                <div class="empty-state">
+                    <div class="spinner" style="margin: 0 auto 15px auto;"></div>
+                    <p>Lade Speicherinformationen…</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Snapshots Modal -->
+    <div class="modal-overlay" id="snapshots-modal" style="display: none;">
+        <div class="modal modal-large" style="max-width: 900px; width: 95%;">
+            <div class="modal-header">
+                <h2><span class="btn-icon">📋</span> Snapshots</h2>
+                <button class="close-btn" onclick="BorgGuard.closeSnapshotsModal()">✕</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <table class="archive-table" id="snapshots-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Datum</th>
+                            <th>Größe</th>
+                            <th style="text-align:right;">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="snapshots-tbody">
+                        <tr>
+                            <td colspan="4">
+                                <div class="empty-state">
+                                    <div class="empty-icon">📂</div>
+                                    <p>Wird geladen…</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Immich Kiosk Config Modal -->
+    <div class="modal-overlay" id="kiosk-modal" style="display: none;">
+        <div class="modal-content" style="max-width: 900px; width: 95%; height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2 style="display:flex; align-items:center; gap:10px;">
+                    <span class="btn-icon">🖼️</span> Immich Kiosk Konfiguration
+                </h2>
+                <button class="close-btn" onclick="BorgGuard.closeKioskModal()">✕</button>
+            </div>
+            <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 20px;">
+                <p style="margin-bottom: 10px; font-size: 0.9em; opacity: 0.8;">Bearbeite hier die <code style="background: var(--bg-body); padding: 2px 5px; border-radius: 4px;">config.yaml</code> für deinen immich-kiosk. Der Container wird beim Speichern automatisch neu gestartet.</p>
+                <textarea id="kiosk-config-editor" style="flex: 1; width: 100%; font-family: monospace; font-size: 14px; background: var(--bg-body); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 15px; resize: none;"></textarea>
+                <div class="modal-actions" style="margin-top: 15px; justify-content: space-between; display: flex;">
+                    <div id="kiosk-config-path" style="font-size: 0.8em; opacity: 0.5;">Pfad...</div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="action-btn" onclick="BorgGuard.closeKioskModal()">Abbrechen</button>
+                        <button class="action-btn primary" onclick="BorgGuard.saveKioskConfig()">💾 Speichern & Neustarten</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Repository (Sicherungsort) Modal -->
+    <div class="modal-overlay" id="repo-modal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="repo-modal-title">➕ Sicherungsort hinzufügen</h2>
+                <button class="close-btn" onclick="BorgGuard.closeRepoModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="repo-original-label">
+                
+                <div class="schedule-section">
+                    <label class="section-label">Bezeichnung / Name</label>
+                    <input type="text" class="cron-input" id="repo-name-input" placeholder="z.B. Lokales USB-Laufwerk" style="margin:0;">
+                </div>
+
+                <div class="schedule-section">
+                    <label class="section-label">Typ des Sicherungsortes</label>
+                    <select class="cron-input" id="repo-type-select" onchange="BorgGuard.onRepoTypeChange()" style="margin:0;">
+                        <option value="gdrive">☁️ Google Drive (rclone / Local Sync)</option>
+                        <option value="local">📁 Lokales Verzeichnis / Externe Festplatte</option>
+                        <option value="hetzner">🌩️ Hetzner Storage Box (SSH)</option>
+                        <option value="ssh">🔑 Sonstiger Remote SSH / SFTP Server</option>
+                    </select>
+                </div>
+
+                <div class="schedule-section">
+                    <label class="section-label">Pfad / Repository-URL</label>
+                    <input type="text" class="cron-input" id="repo-path-input" placeholder="z.B. /mnt/usb_backup/repo oder ssh://user@host:23/./backup" spellcheck="false" style="margin:0;">
+                    <div class="cron-help" id="repo-path-help">Für lokale Pfade: Stelle sicher, dass das Verzeichnis in docker-compose.yml gemountet ist.</div>
+                </div>
+
+                <div class="schedule-section">
+                    <label class="section-label">Eindeutiger Bezeichner (Label)</label>
+                    <input type="text" class="cron-input" id="repo-label-input" placeholder="z.B. usb-backup-1" spellcheck="false" style="margin:0;">
+                </div>
+
+                <div class="schedule-section">
+                    <label class="section-label">Speicher-Limit (GB)</label>
+                    <input type="number" class="cron-input" id="repo-limit-input" value="1000" min="1" step="1" style="margin:0;">
+                </div>
+
+                <div class="schedule-actions" style="margin-top:20px;">
+                    <button class="action-btn primary" onclick="BorgGuard.saveRepository()" style="width:100%;justify-content:center;">
+                        <span class="btn-icon">💾</span>
+                        Sicherungsort speichern
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="/static/js/api.js?v=__BORGGUARD_BUILD__"></script>
+    <script src="/static/js/components.js?v=__BORGGUARD_BUILD__"></script>
+    <script src="/static/js/app.js?v=__BORGGUARD_BUILD__"></script>
+</body>
+</html>
+
