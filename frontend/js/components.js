@@ -67,16 +67,17 @@ const UI = {
             
             let updateBtn = '';
             if (data.project_id && data.project_id !== 'other') {
-                updateBtn = `<button onclick="BorgGuard.updateProject('${data.project_id}')" title="Ganzes Projekt '${data.name}' updaten (pull & up)" class="action-btn-small" style="background:var(--accent-cyan);color:var(--bg-app);border:none;margin-left:10px;">⬇️ Update</button>`;
+                updateBtn = `<button onclick="event.stopPropagation(); BorgGuard.updateProject('${data.project_id}')" title="Ganzes Projekt '${data.name}' updaten (pull & up)" class="action-btn-small" style="background:var(--accent-cyan);color:var(--bg-app);border:none;margin-left:10px;">⬇️ Update</button>`;
             }
             
             let groupHtml = `<div class="service-group">
-                <div class="service-group-header" style="display:flex; align-items:center;">
+                <div class="service-group-header" style="display:flex; align-items:center;" onclick="UI.toggleServiceGroup(this)">
+                    <span class="group-toggle-icon collapsed" style="margin-right: 6px;">▼</span>
                     ${statusIcon} ${data.name} ${version}
                     <div style="flex:1"></div>
                     ${updateBtn}
                 </div>
-                <ul class="service-list">`;
+                <ul class="service-list collapsed">`;
                 
             for (const c of data.containers) {
                 const stateClass = c.state === 'running' ? 'running' : (c.state === 'exited' ? 'stopped' : 'warning');
@@ -117,6 +118,15 @@ const UI = {
         if (statusEl) {
             statusEl.innerText = allHealthy ? 'Online' : 'Warnung';
             statusEl.style.color = allHealthy ? 'var(--accent-green)' : 'var(--accent-orange)';
+        }
+    },
+    
+    toggleServiceGroup(headerEl) {
+        const icon = headerEl.querySelector('.group-toggle-icon');
+        const list = headerEl.nextElementSibling;
+        if (list && list.classList.contains('service-list')) {
+            list.classList.toggle('collapsed');
+            if (icon) icon.classList.toggle('collapsed');
         }
     },
     
