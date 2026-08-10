@@ -210,11 +210,24 @@ body::before {
 
 
 /* ── Status Cards Grid ─────────────────────────────────────────────────── */
+.dashboard-top-section {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-xl);
+    margin-bottom: var(--space-xl);
+    align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+    .dashboard-top-section {
+        grid-template-columns: 1fr;
+    }
+}
+
 .status-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: var(--space-lg);
-    margin-bottom: var(--space-xl);
 }
 
 .status-card {
@@ -356,10 +369,28 @@ body::before {
     color: var(--text-primary);
 }
 
+.actions-panel.compact {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.actions-panel.compact h2 {
+    margin-bottom: var(--space-md);
+}
+
 .actions-grid {
     display: flex;
     gap: var(--space-md);
     flex-wrap: wrap;
+}
+
+.actions-panel.compact .actions-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+    flex: 1;
+    align-content: start;
 }
 
 .action-btn {
@@ -376,6 +407,16 @@ body::before {
     transition: all var(--transition-fast);
     position: relative;
     overflow: hidden;
+}
+
+.actions-panel.compact .action-btn {
+    padding: var(--space-xs) var(--space-md);
+    font-size: 0.85rem;
+    border-radius: var(--radius-sm);
+}
+
+.actions-panel.compact .action-btn .btn-icon {
+    font-size: 1rem;
 }
 
 .action-btn::before {
@@ -451,7 +492,7 @@ body::before {
 /* ── Panels (Archives, Logs, Services) ─────────────────────────────────── */
 .panel-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    grid-template-columns: 1fr;
     gap: var(--space-xl);
     margin-bottom: var(--space-xl);
     align-items: start;

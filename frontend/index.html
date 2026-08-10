@@ -63,91 +63,80 @@
             <div class="progress-log" id="progress-log" style="display:none;"></div>
         </div>
 
-        <!-- ─── Status Cards ────────────────────────────────────────── -->
-        <section class="status-grid" id="status-grid">
-            <!-- Last Backup -->
-            <div class="status-card" id="card-lastbackup">
-                <div class="card-header">
-                    <div class="card-icon cyan">🕐</div>
-                    <span class="card-label">Letzter Snapshot</span>
+        <!-- ─── Top Section (Status Cards + Actions) ────────────────── -->
+        <div class="dashboard-top-section">
+            <section class="status-grid" id="status-grid">
+                <!-- Last Backup -->
+                <div class="status-card" id="card-lastbackup">
+                    <div class="card-header">
+                        <div class="card-icon cyan">🕐</div>
+                        <span class="card-label">Letzter Snapshot</span>
+                    </div>
+                    <div class="card-value" id="last-backup-time">
+                        <div class="skeleton skeleton-large"></div>
+                    </div>
+                    <div class="card-detail" id="last-backup-detail">Wird geladen…</div>
                 </div>
-                <div class="card-value" id="last-backup-time">
-                    <div class="skeleton skeleton-large"></div>
-                </div>
-                <div class="card-detail" id="last-backup-detail">Wird geladen…</div>
-            </div>
 
-            <!-- Snapshot Count -->
-            <div class="status-card clickable" id="card-archives" onclick="BorgGuard.openSnapshotsModal()" title="Alle Snapshots anzeigen">
-                <div class="card-header">
-                    <div class="card-icon purple">📦</div>
-                    <span class="card-label">Snapshots</span>
+                <!-- Snapshot Count -->
+                <div class="status-card clickable" id="card-archives" onclick="BorgGuard.openSnapshotsModal()" title="Alle Snapshots anzeigen">
+                    <div class="card-header">
+                        <div class="card-icon purple">📦</div>
+                        <span class="card-label">Snapshots</span>
+                    </div>
+                    <div class="card-value" id="archive-count">
+                        <div class="skeleton skeleton-large"></div>
+                    </div>
+                    <div class="card-detail" id="archive-detail">Gespeicherte Snapshots</div>
                 </div>
-                <div class="card-value" id="archive-count">
-                    <div class="skeleton skeleton-large"></div>
-                </div>
-                <div class="card-detail" id="archive-detail">Gespeicherte Snapshots</div>
-            </div>
 
-            <!-- Google Drive Speicher (clickable link to Google Drive) -->
-            <div class="status-card clickable" id="card-storage" onclick="BorgGuard.openGoogleDrive()" title="Google Drive Speicherverzeichnis in neuem Tab öffnen">
-                <div class="card-header">
-                    <div class="card-icon green">☁️</div>
-                    <span class="card-label">Google Drive Speicher</span>
+                <!-- Google Drive Speicher (clickable link to Google Drive) -->
+                <div class="status-card clickable" id="card-storage" onclick="BorgGuard.openGoogleDrive()" title="Google Drive Speicherverzeichnis in neuem Tab öffnen">
+                    <div class="card-header">
+                        <div class="card-icon green">☁️</div>
+                        <span class="card-label">Google Drive Speicher</span>
+                    </div>
+                    <div class="card-value" id="storage-size">
+                        <div class="skeleton skeleton-large"></div>
+                    </div>
+                    <div class="card-detail" id="storage-detail">In Google Drive öffnen ↗</div>
                 </div>
-                <div class="card-value" id="storage-size">
-                    <div class="skeleton skeleton-large"></div>
-                </div>
-                <div class="card-detail" id="storage-detail">In Google Drive öffnen ↗</div>
-            </div>
+            </section>
 
-            <!-- Services -->
-            <div class="status-card" id="card-services">
-                <div class="card-header">
-                    <div class="card-icon orange">🐳</div>
-                    <span class="card-label">Dienste</span>
+            <section class="actions-panel compact" id="actions-panel">
+                <h2>⚡ Aktionen</h2>
+                <div class="actions-grid">
+                    <button class="action-btn primary" id="btn-backup" onclick="BorgGuard.triggerBackup()">
+                        <span class="btn-icon">▶️</span>
+                        Backup erstellen
+                    </button>
+                    <button class="action-btn secondary" id="btn-check" onclick="BorgGuard.triggerCheck()">
+                        <span class="btn-icon">🔍</span>
+                        Integrität prüfen
+                    </button>
+                    <button class="action-btn warning" id="btn-prune" onclick="BorgGuard.triggerPrune()">
+                        <span class="btn-icon">🧹</span>
+                        Alte Snapshots bereinigen
+                    </button>
+                    <button class="action-btn" id="btn-schedule" onclick="BorgGuard.openSchedule()">
+                        <span class="btn-icon">⏰</span>
+                        Automatische Backups
+                    </button>
+                    <button class="action-btn" id="btn-config" onclick="BorgGuard.openConfig()">
+                        <span class="btn-icon">⚙️</span>
+                        Konfiguration ansehen
+                    </button>
+                    <button class="action-btn" id="btn-kiosk" onclick="BorgGuard.openKioskModal()">
+                        <span class="btn-icon">🖼️</span>
+                        Immich Kiosk Config
+                    </button>
+                    <button class="action-btn danger" id="btn-break-lock" onclick="BorgGuard.triggerBreakLock()">
+                        <span class="btn-icon">🔓</span>
+                        Sperre aufheben
+                    </button>
                 </div>
-                <div class="card-value" id="services-status">
-                    <div class="skeleton skeleton-large"></div>
-                </div>
-                <div class="card-detail" id="services-detail">Container-Status</div>
-            </div>
-        </section>
-
-        <!-- ─── Actions Panel ───────────────────────────────────────── -->
-        <section class="actions-panel" id="actions-panel">
-            <h2>⚡ Aktionen</h2>
-            <div class="actions-grid">
-                <button class="action-btn primary" id="btn-backup" onclick="BorgGuard.triggerBackup()">
-                    <span class="btn-icon">▶️</span>
-                    Backup erstellen
-                </button>
-                <button class="action-btn secondary" id="btn-check" onclick="BorgGuard.triggerCheck()">
-                    <span class="btn-icon">🔍</span>
-                    Integrität prüfen
-                </button>
-                <button class="action-btn warning" id="btn-prune" onclick="BorgGuard.triggerPrune()">
-                    <span class="btn-icon">🧹</span>
-                    Alte Snapshots bereinigen
-                </button>
-                <button class="action-btn" id="btn-schedule" onclick="BorgGuard.openSchedule()">
-                    <span class="btn-icon">⏰</span>
-                    Automatische Backups
-                </button>
-                <button class="action-btn" id="btn-config" onclick="BorgGuard.openConfig()">
-                    <span class="btn-icon">⚙️</span>
-                    Konfiguration ansehen
-                </button>
-                <button class="action-btn" id="btn-kiosk" onclick="BorgGuard.openKioskModal()">
-                    <span class="btn-icon">🖼️</span>
-                    Immich Kiosk Config
-                </button>
-                <button class="action-btn danger" id="btn-break-lock" onclick="BorgGuard.triggerBreakLock()" style="background-color: #ef4444; color: white; border-color: #ef4444;">
-                    <span class="btn-icon">🔓</span>
-                    Restic-Sperre (Lock) aufheben
-                </button>
-            </div>
-        </section>
+            </section>
+        </div>
 
         <!-- ─── Panels Grid ─────────────────────────────────────────── -->
         <div class="panel-grid">
