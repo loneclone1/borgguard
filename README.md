@@ -1,4 +1,4 @@
-# 🛡️ RestiGuard by JB – Restic Backup Management Dashboard
+# 🛡️ BorgGuard by JB – Restic Backup Management Dashboard
 
 Ein modernes Web-Dashboard zur Überwachung und Steuerung von Borg-Backups über borgmatic mit automatischer Synchronisation zu Google Drive (via `rclone`).
 

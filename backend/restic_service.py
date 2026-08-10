@@ -1,4 +1,4 @@
-"""BorgGuard (ResticGuard) – Restic CLI Service
+"""BorgGuard – Restic CLI Service
 
 Wraps restic CLI commands and parses their output.
 All commands are executed asynchronously via asyncio.subprocess.

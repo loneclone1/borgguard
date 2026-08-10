@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
-LABEL maintainer="RestiGuard by JB"
-LABEL description="RestiGuard by JB – Restic Backup Management Dashboard"
+LABEL maintainer="BorgGuard by JB"
+LABEL description="BorgGuard by JB – Restic Backup Management Dashboard"
 
 # Install restic, Docker CLI, and system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

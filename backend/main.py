@@ -52,7 +52,7 @@ STATUS_CACHE_TTL = 300.0
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan – startup and shutdown."""
-    print("🛡️  RestiGuard by JB gestartet")
+    print("🛡️  BorgGuard by JB gestartet")
     print(f"   Dashboard: http://{config.HOST}:{config.PORT}")
     print(f"   Restic-Config: {config.RESTIC_CONFIG}")
     # Start scheduler
@@ -61,11 +61,11 @@ async def lifespan(app: FastAPI):
     yield
     # Stop scheduler
     scheduler.stop()
-    print("🛡️  RestiGuard by JB gestoppt")
+    print("🛡️  BorgGuard by JB gestoppt")
 
 
 app = FastAPI(
-    title="RestiGuard by JB",
+    title="BorgGuard by JB",
     description="Backup-Management-Dashboard für Restic",
     version="1.1.0",
     lifespan=lifespan,
@@ -97,7 +97,7 @@ async def serve_dashboard(username: str = Depends(verify_credentials)):
         ws_token = base64.b64encode(f"{config.DASHBOARD_USER}:{config.DASHBOARD_PASSWORD}".encode()).decode()
         html = html.replace("__BORGGUARD_WS_TOKEN__", ws_token)
         return HTMLResponse(content=html)
-    return HTMLResponse(content="<h1>RestiGuard by JB – Frontend nicht gefunden</h1>", status_code=404)
+    return HTMLResponse(content="<h1>BorgGuard by JB – Frontend nicht gefunden</h1>", status_code=404)
 
 
 # ─── Status / Overview ───────────────────────────────────────────────────────

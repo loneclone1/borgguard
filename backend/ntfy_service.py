@@ -71,10 +71,10 @@ async def notify_job_started(job_type: str, job_id: str):
     label = type_labels.get(job_type, job_type)
 
     await send_notification(
-        title=f"🛡️ RestiGuard by JB: {label} gestartet",
+        title=f"🛡️ BorgGuard by JB: {label} gestartet",
         message=f"Job {job_id} wurde gestartet.",
         priority="low",
-        tags=["hourglass_flowing_sand", "restiguard"],
+        tags=["hourglass_flowing_sand", "borgguard"],
     )
 
 
@@ -99,10 +99,10 @@ async def notify_job_completed(job_type: str, job_id: str, duration_seconds: flo
             duration_str = f" (Dauer: {seconds}s)"
 
     await send_notification(
-        title=f"✅ RestiGuard by JB: {label} erfolgreich",
+        title=f"✅ BorgGuard by JB: {label} erfolgreich",
         message=f"Job {job_id} wurde erfolgreich abgeschlossen.{duration_str}",
         priority="default",
-        tags=["white_check_mark", "restiguard"],
+        tags=["white_check_mark", "borgguard"],
     )
 
 
@@ -123,8 +123,8 @@ async def notify_job_failed(job_type: str, job_id: str, error: str = ""):
         error_snippet = f"\n\nFehler: {error[:200]}"
 
     await send_notification(
-        title=f"❌ RestiGuard by JB: {label} fehlgeschlagen",
+        title=f"❌ BorgGuard by JB: {label} fehlgeschlagen",
         message=f"Job {job_id} ist fehlgeschlagen.{error_snippet}",
         priority="high",
-        tags=["x", "warning", "restiguard"],
+        tags=["x", "warning", "borgguard"],
     )
