@@ -678,10 +678,10 @@ body::before {
 }
 
 .service-group-header {
-    font-size: 0.72rem;
+    font-size: 0.85rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    color: var(--text-primary);
     padding: var(--space-sm) var(--space-md);
     font-weight: 600;
     display: flex;
