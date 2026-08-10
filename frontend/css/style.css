@@ -20,9 +20,9 @@
     --glass-shadow:     0 8px 32px hsla(0, 0%, 0%, 0.4);
     --glass-glow:       0 0 40px hsla(200, 80%, 50%, 0.05);
 
-    --text-primary:     hsl(210, 20%, 92%);
-    --text-secondary:   hsl(215, 15%, 60%);
-    --text-muted:       hsl(215, 10%, 40%);
+    --text-primary:     hsl(210, 20%, 98%);
+    --text-secondary:   hsl(215, 15%, 75%);
+    --text-muted:       hsl(215, 10%, 55%);
 
     --accent-cyan:      hsl(190, 85%, 55%);
     --accent-cyan-dim:  hsla(190, 85%, 55%, 0.15);
