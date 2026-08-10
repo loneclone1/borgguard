@@ -137,6 +137,29 @@ def get_system_info():
         mem = psutil.virtual_memory()
         disk = shutil.disk_usage("/")
         
+        mounts = []
+        seen_devs = set()
+        for part in psutil.disk_partitions(all=True):
+            if part.fstype in ('tmpfs', 'devtmpfs', 'squashfs', 'proc', 'sysfs', 'cgroup', 'devpts', 'mqueue', 'bpf', 'overlay'):
+                continue
+            if part.mountpoint.startswith(('/sys', '/proc', '/dev', '/etc')):
+                continue
+            if part.device in seen_devs:
+                continue
+            try:
+                usage = shutil.disk_usage(part.mountpoint)
+                if usage.total > 0:
+                    mounts.append({
+                        "mountpoint": part.mountpoint,
+                        "total": usage.total,
+                        "used": usage.used,
+                        "free": usage.free,
+                        "percent": round((usage.used / usage.total) * 100, 1)
+                    })
+                    seen_devs.add(part.device)
+            except Exception:
+                pass
+                
         return {
             "system": {
                 "hostname": hostname,
@@ -152,7 +175,8 @@ def get_system_info():
                 "disk_total": disk.total,
                 "disk_used": disk.used,
                 "disk_free": disk.free,
-                "disk_percent": round((disk.used / disk.total) * 100, 1) if disk.total > 0 else 0
+                "disk_percent": round((disk.used / disk.total) * 100, 1) if disk.total > 0 else 0,
+                "extra_mounts": mounts
             }
         }
     except Exception as e:

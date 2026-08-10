@@ -151,7 +151,7 @@ const UI = {
         const ramColor = hw.ram_percent > 80 ? 'var(--accent-red)' : 'var(--accent-cyan)';
         const diskColor = hw.disk_percent > 80 ? 'var(--accent-orange)' : 'var(--accent-green)';
 
-        container.innerHTML = `
+        let html = `
             <div style="display:flex; flex-direction:column; gap:var(--space-md);">
                 <div style="background:hsla(220, 20%, 12%, 0.4); padding:var(--space-sm) var(--space-md); border-radius:var(--radius-sm); border:1px solid var(--glass-border);">
                     <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.05em; font-weight: 600;">System</div>
@@ -195,10 +195,36 @@ const UI = {
                             <div style="width:${hw.disk_percent}%; background:${diskColor}; height:100%; transition:width var(--transition-normal);"></div>
                         </div>
                         <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; text-align:right;">Frei: ${diskFreeGB} GB</div>
-                    </div>
+                    </div>`;
+                    
+        if (hw.extra_mounts && hw.extra_mounts.length > 0) {
+            for (const mount of hw.extra_mounts) {
+                if (mount.mountpoint === '/') continue; // skip root, already shown
+                const mUsedGB = (mount.used / 1024**3).toFixed(1);
+                const mTotalGB = (mount.total / 1024**3).toFixed(1);
+                const mFreeGB = (mount.free / 1024**3).toFixed(1);
+                const mColor = mount.percent > 80 ? 'var(--accent-orange)' : 'var(--accent-green)';
+                
+                html += `
+                    <div style="margin-top:4px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem;">
+                            <span style="color:var(--text-secondary);"><span title="Mountpoint">📁</span> ${this.escapeHtml(mount.mountpoint)} (${mUsedGB} / ${mTotalGB} GB)</span>
+                            <span style="color:${mColor}; font-weight:600; font-family:var(--font-mono);">${mount.percent.toFixed(1)}%</span>
+                        </div>
+                        <div style="width:100%; background:hsla(220, 20%, 20%, 0.3); height:6px; border-radius:3px; overflow:hidden;">
+                            <div style="width:${mount.percent}%; background:${mColor}; height:100%; transition:width var(--transition-normal);"></div>
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; text-align:right;">Frei: ${mFreeGB} GB</div>
+                    </div>`;
+            }
+        }
+        
+        html += `
                 </div>
             </div>
         `;
+        
+        container.innerHTML = html;
     },
     
     renderLogs(content, containerId) {
