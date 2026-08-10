@@ -495,7 +495,7 @@ body::before {
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
     gap: var(--space-xl);
     margin-bottom: var(--space-xl);
-    align-items: start;
+    align-items: stretch;
 }
 
 #services-body {
@@ -517,6 +517,8 @@ body::before {
     backdrop-filter: blur(20px);
     box-shadow: var(--glass-shadow);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .panel-header {
@@ -543,6 +545,7 @@ body::before {
     padding: var(--space-lg);
     max-height: 450px;
     overflow-y: auto;
+    flex: 1;
 }
 
 /* Custom scrollbar */
