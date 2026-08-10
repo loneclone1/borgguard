@@ -47,7 +47,26 @@ BUILD_TS = str(int(time()))
 
 STATUS_CACHE_TIME = 0.0
 STATUS_CACHE_TTL = 300.0
+_STATUS_UPDATE_TASK = None
 
+async def _update_status_background():
+    """Background task to fetch restic info without blocking the API."""
+    global STATUS_CACHE_TIME
+    try:
+        archives_result = await list_snapshots()
+        if archives_result["success"] and archives_result.get("data") is not None:
+            archive_list = archives_result["data"]
+            job_manager.last_known_archive_count = len(archive_list)
+            job_manager.last_known_archives = archive_list
+            if archive_list:
+                job_manager.last_known_backup = archive_list[-1]
+        
+        # We intentionally skip get_repo_info() here to avoid running the extremely slow `restic stats` 
+        # on every dashboard refresh. The frontend doesn't use it on the main page.
+        
+        STATUS_CACHE_TIME = time()
+    except Exception as e:
+        print(f"Error in background status update: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -105,43 +124,24 @@ async def serve_dashboard(username: str = Depends(verify_credentials)):
 @app.get("/api/status")
 async def api_status(username: str = Depends(verify_credentials)):
     """Get overall backup and service status."""
-    global STATUS_CACHE_TIME
+    global STATUS_CACHE_TIME, _STATUS_UPDATE_TASK
     
     # Run blocking Docker API calls in a threadpool to prevent event loop stalls
     services = await asyncio.to_thread(get_service_summary)
     now = time()
-
-    last_backup = None
-    archive_count = 0
-    repo_info = {}
     cached = False
 
-    if job_manager.is_busy() or (now - STATUS_CACHE_TIME < STATUS_CACHE_TTL and job_manager.last_known_backup is not None):
-        # Borg lock prevents listing, or we are in cache period – use cached values
-        last_backup = job_manager.last_known_backup
-        archive_count = job_manager.last_known_archive_count or 0
-        repo_info = job_manager.last_known_repo_info or {}
-        cached = True
+    # Stale-While-Revalidate: Trigger background update if cache expired
+    if not job_manager.is_busy() and (now - STATUS_CACHE_TIME > STATUS_CACHE_TTL):
+        if _STATUS_UPDATE_TASK is None or _STATUS_UPDATE_TASK.done():
+            _STATUS_UPDATE_TASK = asyncio.create_task(_update_status_background())
     else:
-        # Fetch fresh data
-        archives_result = await list_snapshots()
-        repo_result = await get_repo_info()
+        cached = True
 
-        if archives_result["success"] and archives_result.get("data"):
-            archive_list = archives_result["data"]
-            archive_count = len(archive_list)
-            if archive_list:
-                last_backup = archive_list[-1]
-            # Update cache
-            job_manager.last_known_backup = last_backup
-            job_manager.last_known_archive_count = archive_count
-            job_manager.last_known_archives = archive_list
-
-        if repo_result["success"]:
-            repo_info = repo_result.get("data", {})
-            job_manager.last_known_repo_info = repo_info
-
-        STATUS_CACHE_TIME = now
+    # Always return cached data immediately
+    last_backup = job_manager.last_known_backup
+    archive_count = job_manager.last_known_archive_count or 0
+    repo_info = job_manager.last_known_repo_info or {}
 
     current_job = None
     if job_manager.current_job:
