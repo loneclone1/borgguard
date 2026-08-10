@@ -13,6 +13,7 @@ import platform
 import socket
 import psutil
 import shutil
+import docker
 
 from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -133,6 +134,12 @@ def get_system_info():
             ip_address = socket.gethostbyname(hostname)
         except Exception:
             ip_address = "Unbekannt"
+        try:
+            client = docker.from_env()
+            docker_info = client.info()
+            os_name = docker_info.get("OperatingSystem", f"{platform.system()} {platform.release()}")
+        except Exception:
+            os_name = f"{platform.system()} {platform.release()}"
             
         mem = psutil.virtual_memory()
         disk = shutil.disk_usage("/")
@@ -163,7 +170,7 @@ def get_system_info():
         return {
             "system": {
                 "hostname": hostname,
-                "os": f"{platform.system()} {platform.release()}",
+                "os": os_name,
                 "ip": ip_address
             },
             "hardware": {

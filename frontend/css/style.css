@@ -387,8 +387,8 @@ body::before {
 
 .actions-panel.compact .actions-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-sm);
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-xs);
     flex: 1;
     align-content: start;
 }
@@ -492,7 +492,7 @@ body::before {
 /* ── Panels (Archives, Logs, Services) ─────────────────────────────────── */
 .panel-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
     gap: var(--space-xl);
     margin-bottom: var(--space-xl);
     align-items: start;
