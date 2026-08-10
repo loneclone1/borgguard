@@ -8,15 +8,7 @@ When copying data between the local Windows workstation and the Linux server for
 - **Local Project Directory:** `d:\antigrav\borgguard\`
 
 ## Commands
-**Copy local changes to server (PowerShell):**
+**Deploy to server and restart Docker (PowerShell All-in-One):**
 ```powershell
-scp -r d:\antigrav\borgguard\* jb@192.168.2.113:/home/jb/borgguard/
-```
-
-**Restart Docker Container (SSH):**
-```bash
-ssh jb@192.168.2.113
-cd /home/jb/borgguard
-docker compose build --no-cache
-docker compose up -d
+scp -r d:\antigrav\borgguard\* jb@192.168.2.113:/home/jb/borgguard/ ; ssh jb@192.168.2.113 "cd /home/jb/borgguard && docker compose build --no-cache && docker compose up -d"
 ```
