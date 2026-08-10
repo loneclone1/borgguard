@@ -140,7 +140,10 @@ async def api_status(username: str = Depends(verify_credentials)):
 
     # Always return cached data immediately
     last_backup = job_manager.last_known_backup
-    archive_count = job_manager.last_known_archive_count or 0
+    if STATUS_CACHE_TIME == 0.0:
+        archive_count = None
+    else:
+        archive_count = job_manager.last_known_archive_count or 0
     repo_info = job_manager.last_known_repo_info or {}
 
     current_job = None

@@ -46,8 +46,12 @@ const BorgGuard = {
                 } catch (e) { /* fallback */ }
                 
                 if (status.archive_count !== undefined) {
-                    document.getElementById('archive-count').innerHTML = status.archive_count > 0 ? status.archive_count : '<span class="text-gray-400">Keine Snapshots</span>';
-                    this._archiveCountCache = status.archive_count;
+                    if (status.archive_count === null) {
+                        document.getElementById('archive-count').innerHTML = '<div class="spinner" style="width:20px;height:20px;margin:auto;"></div>';
+                    } else {
+                        document.getElementById('archive-count').innerHTML = status.archive_count > 0 ? status.archive_count : '<span class="text-gray-400">Keine Snapshots</span>';
+                        this._archiveCountCache = status.archive_count;
+                    }
                 }
                 
                 // ─── Last Backup display (with cache fix) ───
@@ -86,6 +90,9 @@ const BorgGuard = {
                         let diffStr = diff < 1 ? 'Kürzlich' : (diff < 24 ? `Vor ${diff}h` : `Vor ${Math.floor(diff/24)}d`);
                         if (lastEl) lastEl.innerText = diffStr;
                         if (lastBackupDetailEl) lastBackupDetailEl.innerText = new Date(this._lastBackupCache.start).toLocaleString('de-DE');
+                    } else if (status.archive_count === null) {
+                        if (lastEl) lastEl.innerHTML = '<div class="spinner" style="width:20px;height:20px;margin:auto;"></div>';
+                        if (lastBackupDetailEl) lastBackupDetailEl.innerText = 'Daten werden geladen…';
                     } else {
                         if (lastEl) lastEl.innerText = 'Nie';
                         if (lastBackupDetailEl) lastBackupDetailEl.innerText = 'Noch kein Backup erstellt';
