@@ -130,6 +130,77 @@ const UI = {
         }
     },
     
+    renderServerOverview(data) {
+        const container = document.getElementById('server-body');
+        if (!container) return;
+        if (!data || !data.system || !data.hardware) {
+            container.innerHTML = '<div class="empty-state"><p>Keine Serverdaten verfügbar.</p></div>';
+            return;
+        }
+
+        const sys = data.system;
+        const hw = data.hardware;
+
+        const ramUsedGB = (hw.ram_used / 1024**3).toFixed(1);
+        const ramTotalGB = (hw.ram_total / 1024**3).toFixed(1);
+        const diskUsedGB = (hw.disk_used / 1024**3).toFixed(1);
+        const diskTotalGB = (hw.disk_total / 1024**3).toFixed(1);
+        const diskFreeGB = (hw.disk_free / 1024**3).toFixed(1);
+
+        const cpuColor = hw.cpu_percent > 80 ? 'var(--accent-red)' : 'var(--accent-cyan)';
+        const ramColor = hw.ram_percent > 80 ? 'var(--accent-red)' : 'var(--accent-cyan)';
+        const diskColor = hw.disk_percent > 80 ? 'var(--accent-orange)' : 'var(--accent-green)';
+
+        container.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:var(--space-md);">
+                <div style="background:hsla(220, 20%, 12%, 0.4); padding:var(--space-sm) var(--space-md); border-radius:var(--radius-sm); border:1px solid var(--glass-border);">
+                    <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.05em; font-weight: 600;">System</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:var(--text-primary); font-size: 0.95rem;">${this.escapeHtml(sys.hostname)}</strong>
+                        <span style="font-family:var(--font-mono); font-size:0.8rem; color:var(--text-muted);">${this.escapeHtml(sys.ip)}</span>
+                    </div>
+                    <div style="font-size:0.82rem; color:var(--text-secondary); margin-top:2px;">${this.escapeHtml(sys.os)}</div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:14px; margin-top:8px;">
+                    <!-- CPU -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem;">
+                            <span style="color:var(--text-secondary);">CPU (${hw.cpu_cores} Cores)</span>
+                            <span style="color:${cpuColor}; font-weight:600; font-family:var(--font-mono);">${hw.cpu_percent.toFixed(1)}%</span>
+                        </div>
+                        <div style="width:100%; background:hsla(220, 20%, 20%, 0.3); height:6px; border-radius:3px; overflow:hidden;">
+                            <div style="width:${hw.cpu_percent}%; background:${cpuColor}; height:100%; transition:width var(--transition-normal);"></div>
+                        </div>
+                    </div>
+
+                    <!-- RAM -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem;">
+                            <span style="color:var(--text-secondary);">RAM (${ramUsedGB} / ${ramTotalGB} GB)</span>
+                            <span style="color:${ramColor}; font-weight:600; font-family:var(--font-mono);">${hw.ram_percent.toFixed(1)}%</span>
+                        </div>
+                        <div style="width:100%; background:hsla(220, 20%, 20%, 0.3); height:6px; border-radius:3px; overflow:hidden;">
+                            <div style="width:${hw.ram_percent}%; background:${ramColor}; height:100%; transition:width var(--transition-normal);"></div>
+                        </div>
+                    </div>
+
+                    <!-- Disk -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem;">
+                            <span style="color:var(--text-secondary);">Festplatte (${diskUsedGB} / ${diskTotalGB} GB belegt)</span>
+                            <span style="color:${diskColor}; font-weight:600; font-family:var(--font-mono);">${hw.disk_percent.toFixed(1)}%</span>
+                        </div>
+                        <div style="width:100%; background:hsla(220, 20%, 20%, 0.3); height:6px; border-radius:3px; overflow:hidden;">
+                            <div style="width:${hw.disk_percent}%; background:${diskColor}; height:100%; transition:width var(--transition-normal);"></div>
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; text-align:right;">Frei: ${diskFreeGB} GB</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    
     renderLogs(content, containerId) {
         const el = document.getElementById(containerId);
         if (!el) return;

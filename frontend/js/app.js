@@ -119,6 +119,10 @@ const BorgGuard = {
                     UI.renderServices(status.services);
                 }
                 
+                if (status.system_info) {
+                    UI.renderServerOverview(status.system_info);
+                }
+                
                 const d = new Date();
                 const updateEl = document.getElementById('last-update');
                 if(updateEl) updateEl.innerText = `Letztes Update: ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;

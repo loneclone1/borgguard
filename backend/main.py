@@ -9,6 +9,10 @@ import base64
 from contextlib import asynccontextmanager
 from pathlib import Path
 from time import time
+import platform
+import socket
+import psutil
+import shutil
 
 from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -121,6 +125,40 @@ async def serve_dashboard(username: str = Depends(verify_credentials)):
 
 # ─── Status / Overview ───────────────────────────────────────────────────────
 
+def get_system_info():
+    """Fetches system and hardware info for the Server Overview widget."""
+    try:
+        hostname = socket.gethostname()
+        try:
+            ip_address = socket.gethostbyname(hostname)
+        except Exception:
+            ip_address = "Unbekannt"
+            
+        mem = psutil.virtual_memory()
+        disk = shutil.disk_usage("/")
+        
+        return {
+            "system": {
+                "hostname": hostname,
+                "os": f"{platform.system()} {platform.release()}",
+                "ip": ip_address
+            },
+            "hardware": {
+                "cpu_percent": psutil.cpu_percent(interval=None),
+                "cpu_cores": psutil.cpu_count(logical=True),
+                "ram_total": mem.total,
+                "ram_used": mem.used,
+                "ram_percent": mem.percent,
+                "disk_total": disk.total,
+                "disk_used": disk.used,
+                "disk_free": disk.free,
+                "disk_percent": round((disk.used / disk.total) * 100, 1) if disk.total > 0 else 0
+            }
+        }
+    except Exception as e:
+        print(f"Error fetching system info: {e}")
+        return None
+
 @app.get("/api/status")
 async def api_status(username: str = Depends(verify_credentials)):
     """Get overall backup and service status."""
@@ -128,6 +166,7 @@ async def api_status(username: str = Depends(verify_credentials)):
     
     # Run blocking Docker API calls in a threadpool to prevent event loop stalls
     services = await asyncio.to_thread(get_service_summary)
+    system_info = await asyncio.to_thread(get_system_info)
     now = time()
     cached = False
 
@@ -157,6 +196,7 @@ async def api_status(username: str = Depends(verify_credentials)):
         "archive_count": archive_count,
         "repository": repo_info,
         "services": services,
+        "system_info": system_info,
         "current_job": current_job,
         "recent_jobs": job_manager.history[:5],
     }
