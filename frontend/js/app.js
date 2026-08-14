@@ -250,14 +250,20 @@ const BorgGuard = {
                 // Job status change
                 if (data.status === 'completed' || data.status === 'failed') {
                     const isSuccess = data.status === 'completed';
-                    UI.showToast(
-                        isSuccess ? 'Job erfolgreich abgeschlossen ✅' : 'Job fehlgeschlagen ❌',
-                        isSuccess ? 'success' : 'error'
-                    );
+                    if (!isSuccess) {
+                        const errMsg = data.error || 'Vorgang fehlgeschlagen';
+                        UI.showToast(`❌ Fehlgeschlagen: ${errMsg}`, 'error');
+                        this.switchLogTab('jobs');
+                    } else {
+                        UI.showToast('Job erfolgreich abgeschlossen ✅', 'success');
+                    }
                     UI.hideProgress();
                     this._wsOutputLines = [];
                     this._stopProgressPoll();
-                    setTimeout(() => this.refresh(), 2000);
+                    setTimeout(() => {
+                        this.refresh();
+                        this.loadDrStatus();
+                    }, 1500);
                 } else if (data.status === 'running') {
                     this._wsOutputLines = [];
                     this._startProgressPoll();
@@ -1471,7 +1477,8 @@ const BorgGuard = {
             let html = '<option value="">Neuester Snapshot (Automatisch)</option>';
             for (const s of sorted) {
                 const dateStr = s.start ? new Date(s.start).toLocaleString('de-DE') : '';
-                html += `<option value="${UI.escapeHtml(s.name)}">${UI.escapeHtml(s.name)} (${dateStr})</option>`;
+                const snapIdentifier = s.short_id || (s.id ? s.id.substring(0, 8) : 'Snapshot');
+                html += `<option value="${UI.escapeHtml(s.id)}">${UI.escapeHtml(snapIdentifier)} (${dateStr})</option>`;
             }
             select.innerHTML = html;
         }
@@ -1492,8 +1499,8 @@ const BorgGuard = {
                     badgeEl.className = 'dr-badge failed';
                     badgeEl.innerText = '❌ FAILED';
                     dateEl.innerText = r.last_tested ? new Date(r.last_tested).toLocaleString('de-DE') : '';
-                    msgEl.innerText = r.message || 'Fehlgeschlagen';
-                    detailsEl.innerText = `Snapshot: ${r.short_id || r.snapshot_id} · Dauer: ${r.duration_seconds}s`;
+                    msgEl.innerHTML = `<div style="color: var(--accent-red); font-weight: 600; margin-bottom: 6px;">❌ ${UI.escapeHtml(r.message || 'Fehlgeschlagen')}</div>`;
+                    detailsEl.innerHTML = `<div>Snapshot: <code>${UI.escapeHtml(r.short_id || r.snapshot_id || '—')}</code> · Dauer: ${r.duration_seconds || 0}s</div><div style="margin-top: 10px;"><button class="action-btn-small" onclick="BorgGuard.showJobLogs()" style="border: 1px solid var(--terminal-border); background: var(--terminal-surface); color: var(--text-primary); cursor: pointer; padding: 4px 10px; border-radius: 4px;">📜 Zum Job-Log springen</button></div>`;
                 } else {
                     badgeEl.className = 'dr-badge none';
                     badgeEl.innerText = 'Noch kein Test';
@@ -1505,6 +1512,15 @@ const BorgGuard = {
         } catch (e) {}
 
         document.getElementById('dr-test-modal').style.display = 'flex';
+    },
+
+    showJobLogs() {
+        this.closeDrModal();
+        this.switchLogTab('jobs');
+        const panel = document.getElementById('panel-logs');
+        if (panel) {
+            panel.scrollIntoView({ behavior: 'smooth' });
+        }
     },
 
     closeDrModal() {

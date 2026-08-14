@@ -271,6 +271,9 @@ class JobManager:
             result = await coro_factory()
             job.result = result
             job.status = JobStatus.COMPLETED if result.get("success") else JobStatus.FAILED
+            if not result.get("success"):
+                err_msg = result.get("error") or result.get("stderr") or "Vorgang nicht erfolgreich"
+                await self.add_job_output(job, f"❌ FEHLER: {err_msg}")
         except asyncio.CancelledError:
             job.result = {"success": False, "exit_code": 130, "stderr": "Vorgang durch Benutzer abgebrochen", "duration_seconds": 0}
             job.status = JobStatus.FAILED
@@ -278,13 +281,16 @@ class JobManager:
         except Exception as e:
             job.result = {"success": False, "exit_code": -1, "stderr": str(e), "duration_seconds": 0}
             job.status = JobStatus.FAILED
+            await self.add_job_output(job, f"❌ UNERWARTETER FEHLER: {e}")
 
         job.completed_at = datetime.now().isoformat()
-        job.progress_phase = "Abgeschlossen" if job.status == JobStatus.COMPLETED else ("Abgebrochen" if "abgebrochen" in str(job.result.get("stderr", "")) else "Fehlgeschlagen")
+        job.progress_phase = "Abgeschlossen" if job.status == JobStatus.COMPLETED else ("Abgebrochen" if "abgebrochen" in str(job.result.get("stderr", "")).lower() else "Fehlgeschlagen")
         job.progress_percent = 100 if job.status == JobStatus.COMPLETED else -1
 
-        status_text = "erfolgreich abgeschlossen" if job.status == JobStatus.COMPLETED else ("abgebrochen" if "abgebrochen" in str(job.result.get("stderr", "")) else "fehlgeschlagen")
+        status_text = "erfolgreich abgeschlossen" if job.status == JobStatus.COMPLETED else ("abgebrochen" if "abgebrochen" in str(job.result.get("stderr", "")).lower() else "fehlgeschlagen")
         await self.add_job_output(job, f"=== Job {job.id} ({label}) {status_text} ===")
+
+        err_detail = job.result.get("error") or job.result.get("stderr") or ""
 
         await self._broadcast_json({
             "type": "status",
@@ -293,6 +299,7 @@ class JobManager:
             "status": job.status.value,
             "completed_at": job.completed_at,
             "success": job.status == JobStatus.COMPLETED,
+            "error": err_detail if job.status != JobStatus.COMPLETED else None,
         })
 
         # Send ntfy completion notification
@@ -300,8 +307,7 @@ class JobManager:
         if job.status == JobStatus.COMPLETED:
             asyncio.create_task(notify_job_completed(job.type.value, job.id, duration))
         else:
-            error_msg = job.result.get("stderr", "") if job.result else ""
-            asyncio.create_task(notify_job_failed(job.type.value, job.id, error_msg))
+            asyncio.create_task(notify_job_failed(job.type.value, job.id, err_detail))
 
         # Store stdout/stderr lines in job log if not streamed
         if not job.log_lines:
@@ -313,6 +319,7 @@ class JobManager:
         # Save job log to disk so it shows up in log history
         if job.log_lines:
             write_job_log(job.id, job.log_lines)
+            write_job_log(job.type.value, job.log_lines)
 
         # Move to history
         self._history.append(job)

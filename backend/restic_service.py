@@ -424,7 +424,8 @@ async def modify_snapshot_tags(snapshot_id: str, action: str, tags: List[str]) -
     return res
 
 
-LATEST_DIFF_FILE = Path("/home/jb/borgguard/data/latest_backup_diff.json") if os.path.exists("/home/jb/borgguard") else Path(__file__).resolve().parent.parent / "data" / "latest_backup_diff.json"
+DATA_DIR = Path("/app/logs") if os.path.exists("/app/logs") else Path(__file__).resolve().parent.parent / "logs"
+LATEST_DIFF_FILE = DATA_DIR / "latest_backup_diff.json"
 
 
 def get_latest_backup_diff() -> Optional[dict]:
@@ -441,7 +442,7 @@ def get_latest_backup_diff() -> Optional[dict]:
 def _save_latest_backup_diff(diff_data: dict):
     """Save the diff of the most recent backup."""
     try:
-        LATEST_DIFF_FILE.parent.mkdir(parents=True, exist_ok=True)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         with open(LATEST_DIFF_FILE, "w", encoding="utf-8") as f:
             json.dump(diff_data, f, indent=2, ensure_ascii=False)
     except Exception as e:
@@ -675,7 +676,7 @@ async def restore_snapshot(
 
 # ─── Disaster Recovery Dry-Run (Feature 6) ───────────────────────────────────
 
-DR_REPORT_FILE = Path("/home/jb/borgguard/data/dr_test_report.json") if os.path.exists("/home/jb/borgguard") else Path(__file__).resolve().parent.parent / "data" / "dr_test_report.json"
+DR_REPORT_FILE = DATA_DIR / "dr_test_report.json"
 
 
 def get_latest_dr_report() -> dict:
@@ -701,7 +702,7 @@ def get_latest_dr_report() -> dict:
 def _save_dr_report(report: dict):
     """Save DR test report to persistent JSON file."""
     try:
-        DR_REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         with open(DR_REPORT_FILE, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
     except Exception as e:
@@ -710,7 +711,7 @@ def _save_dr_report(report: dict):
 
 def clean_all_dr_sandboxes():
     """Remove any temporary borgguard_dr_test directories across candidate locations."""
-    candidate_parents = ["/mnt/immich_extern/tmp", "/mnt/immich_old/tmp", "/tmp", "/var/tmp", "/app/tmp"]
+    candidate_parents = ["/tmp", "/var/tmp", "/app/logs/tmp", "/app/tmp"]
     for parent in candidate_parents:
         try:
             p = Path(parent)
@@ -725,17 +726,30 @@ def clean_all_dr_sandboxes():
             pass
 
 
+def _is_dir_writable(path_str: str) -> bool:
+    """Test if a directory exists/can be created and is writable."""
+    try:
+        p = Path(path_str)
+        p.mkdir(parents=True, exist_ok=True)
+        test_file = p / f".borgguard_test_{os.getpid()}"
+        with open(test_file, "w") as f:
+            f.write("ok")
+        test_file.unlink(missing_ok=True)
+        return True
+    except Exception:
+        return False
+
+
 def get_best_sandbox_location(required_bytes: int) -> tuple[Optional[str], int, int]:
-    """Find the candidate sandbox directory with the most free space.
+    """Find the candidate sandbox directory with the most free space on a WRITABLE filesystem.
 
     Returns:
         (best_dir, free_bytes, min_required_bytes)
     """
     candidates = [
-        "/mnt/immich_extern/tmp",
-        "/mnt/immich_old/tmp",
         "/tmp",
         "/var/tmp",
+        "/app/logs/tmp",
         "/app/tmp",
     ]
     best_dir = None
@@ -743,24 +757,18 @@ def get_best_sandbox_location(required_bytes: int) -> tuple[Optional[str], int, 
 
     for c in candidates:
         try:
-            path = Path(c)
-            check_path = path if path.exists() else path.parent
-            if check_path.exists():
-                usage = shutil.disk_usage(str(check_path))
-                if usage.free > max_free:
-                    max_free = usage.free
-                    best_dir = c
+            if not _is_dir_writable(c):
+                continue
+            usage = shutil.disk_usage(c)
+            if usage.free > max_free:
+                max_free = usage.free
+                best_dir = c
         except Exception:
             continue
 
     min_required = required_bytes + (2 * 1024 * 1024 * 1024)
-    if max_free < min_required:
-        return None, max_free, min_required
-
-    try:
-        Path(best_dir).mkdir(parents=True, exist_ok=True)
-    except Exception:
-        pass
+    if not best_dir or max_free < min_required:
+        return None, max(0, max_free), min_required
 
     return best_dir, max_free, min_required
 
