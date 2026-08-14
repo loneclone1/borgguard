@@ -165,5 +165,12 @@ const api = {
             body: JSON.stringify({ snapshot_id: snapshotId }),
         });
     },
+
+    // ─── Job Cancellation ───────────────────────────────────────────────
+    async cancelJob() {
+        return this.fetchJSON('/api/jobs/cancel', {
+            method: 'POST',
+        });
+    },
 };
 

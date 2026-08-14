@@ -54,7 +54,12 @@
                     <span class="progress-job-type" id="progress-job-type">Backup</span>
                     <span class="progress-phase" id="progress-phase">Wird gestartet…</span>
                 </div>
-                <span class="progress-percent" id="progress-percent"></span>
+                <div class="progress-header-right" style="display: flex; align-items: center; gap: 12px;">
+                    <span class="progress-percent" id="progress-percent"></span>
+                    <button class="action-btn-small danger" id="btn-cancel-job" onclick="BorgGuard.cancelCurrentJob()" title="Laufenden Vorgang sofort abbrechen und temporäre Daten bereinigen" style="padding: 3px 10px; font-size: 0.76rem; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid var(--accent-red); background: hsla(0, 80%, 50%, 0.15); color: var(--accent-red); cursor: pointer;">
+                        ⛔ Vorgang abbrechen
+                    </button>
+                </div>
             </div>
             <div class="progress-bar-container">
                 <div class="progress-bar" id="progress-bar"></div>

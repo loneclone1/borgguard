@@ -78,6 +78,8 @@ class JobManager:
     def __init__(self):
         self._lock = asyncio.Lock()
         self._current_job: Optional[Job] = None
+        self._current_task: Optional[asyncio.Task] = None
+        self._current_process: Optional[asyncio.subprocess.Process] = None
         self._history: list[Job] = []
         self._max_history = 50
         self._job_counter = 0
@@ -88,6 +90,52 @@ class JobManager:
         self._last_known_archive_count: Optional[int] = None
         self._last_known_archives: list[dict] = []
         self._last_known_repo_info: Optional[dict] = None
+
+    def register_process(self, proc):
+        """Register the currently active subprocess for cancellation."""
+        self._current_process = proc
+
+    def unregister_process(self, proc):
+        """Unregister subprocess when completed."""
+        if self._current_process == proc:
+            self._current_process = None
+
+    async def cancel_current_job(self) -> bool:
+        """Cancel the currently running job and kill active subprocesses."""
+        if not self.is_busy():
+            return False
+
+        job = self._current_job
+        if job:
+            await self.add_job_output(job, "⚠️ Vorgang wird durch Benutzer abgebrochen…")
+            await self.update_progress(job, phase="Wird abgebrochen…", percent=-1)
+
+        # 1. Kill active subprocess
+        if self._current_process:
+            try:
+                self._current_process.terminate()
+                for _ in range(6):
+                    if self._current_process.returncode is not None:
+                        break
+                    await asyncio.sleep(0.3)
+                if self._current_process.returncode is None:
+                    self._current_process.kill()
+            except Exception:
+                pass
+            self._current_process = None
+
+        # 2. Cancel running task
+        if self._current_task and not self._current_task.done():
+            self._current_task.cancel()
+
+        # Clean DR test sandboxes
+        try:
+            from .restic_service import clean_all_dr_sandboxes
+            clean_all_dr_sandboxes()
+        except Exception:
+            pass
+
+        return True
 
     @property
     def current_job(self) -> Optional[Job]:
@@ -150,7 +198,7 @@ class JobManager:
         job = Job(id=job_id, type=job_type)
 
         self._current_job = job
-        asyncio.create_task(self._run_job(job, coro_factory))
+        self._current_task = asyncio.create_task(self._run_job(job, coro_factory))
         return job
 
     async def update_progress(self, job: Job, phase: str = "", detail: str = "", percent: int = -1):
@@ -200,6 +248,8 @@ class JobManager:
             JobType.CHECK: "Integritätsprüfung",
             JobType.PRUNE: "Bereinigung",
             JobType.COMPACT: "Komprimierung",
+            JobType.RESTORE: "Wiederherstellung",
+            JobType.DR_TEST: "DR-Restore Test",
             JobType.OTHER: "System-Update",
         }
         label = type_labels.get(job.type, job.type.value)
@@ -221,15 +271,19 @@ class JobManager:
             result = await coro_factory()
             job.result = result
             job.status = JobStatus.COMPLETED if result.get("success") else JobStatus.FAILED
+        except asyncio.CancelledError:
+            job.result = {"success": False, "exit_code": 130, "stderr": "Vorgang durch Benutzer abgebrochen", "duration_seconds": 0}
+            job.status = JobStatus.FAILED
+            await self.add_job_output(job, f"=== Job {job.id} ({label}) durch Benutzer abgebrochen ===")
         except Exception as e:
             job.result = {"success": False, "exit_code": -1, "stderr": str(e), "duration_seconds": 0}
             job.status = JobStatus.FAILED
 
         job.completed_at = datetime.now().isoformat()
-        job.progress_phase = "Abgeschlossen" if job.status == JobStatus.COMPLETED else "Fehlgeschlagen"
+        job.progress_phase = "Abgeschlossen" if job.status == JobStatus.COMPLETED else ("Abgebrochen" if "abgebrochen" in str(job.result.get("stderr", "")) else "Fehlgeschlagen")
         job.progress_percent = 100 if job.status == JobStatus.COMPLETED else -1
 
-        status_text = "erfolgreich abgeschlossen" if job.status == JobStatus.COMPLETED else "fehlgeschlagen"
+        status_text = "erfolgreich abgeschlossen" if job.status == JobStatus.COMPLETED else ("abgebrochen" if "abgebrochen" in str(job.result.get("stderr", "")) else "fehlgeschlagen")
         await self.add_job_output(job, f"=== Job {job.id} ({label}) {status_text} ===")
 
         await self._broadcast_json({

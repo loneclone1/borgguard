@@ -27,6 +27,7 @@ from .restic_service import (
     add_repository_to_config,
     unlock_repo as break_lock,
     check_repo as check_integrity,
+    clean_all_dr_sandboxes,
     compute_latest_backup_diff,
     create_backup,
     diff_snapshots,
@@ -90,12 +91,15 @@ async def lifespan(app: FastAPI):
     print("🛡️  BorgGuard by JB gestartet")
     print(f"   Dashboard: http://{config.HOST}:{config.PORT}")
     print(f"   Restic-Config: {config.RESTIC_CONFIG}")
+    # Purge any stale test sandboxes from earlier runs
+    clean_all_dr_sandboxes()
     # Start scheduler
     scheduler.start()
     print(f"   Scheduler: {'aktiv' if scheduler.get_config().get('enabled') else 'inaktiv'}")
     yield
     # Stop scheduler
     scheduler.stop()
+    clean_all_dr_sandboxes()
     print("🛡️  BorgGuard by JB gestoppt")
 
 
@@ -481,6 +485,21 @@ async def api_start_dr_test(
 
     job = await job_manager.start_job(JobType.DR_TEST, _run)
     return {"message": "Disaster Recovery Test gestartet", "job": job.to_dict()}
+
+
+@app.post("/api/jobs/cancel")
+@app.post("/api/job/abort")
+async def api_cancel_job(username: str = Depends(verify_credentials)):
+    """Cancel the currently active job and purge all temporary files."""
+    if not job_manager.is_busy():
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": "Kein laufender Vorgang zum Abbrechen vorhanden."}
+        )
+
+    cancelled = await job_manager.cancel_current_job()
+    clean_all_dr_sandboxes()
+    return {"success": cancelled, "message": "Vorgang wurde abgebrochen und temporäre Daten bereinigt."}
 
 
 # ─── Repository Info ─────────────────────────────────────────────────────────

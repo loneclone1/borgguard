@@ -328,6 +328,17 @@ const BorgGuard = {
             UI.showToast(e.message, 'error');
         }
     },
+
+    async cancelCurrentJob() {
+        if (!confirm('Möchtest du den aktuell laufenden Vorgang wirklich abbrechen?\n\nAlle laufenden Prozesse werden gestoppt und temporäre Daten sofort bereinigt.')) return;
+        try {
+            const res = await api.cancelJob();
+            UI.showToast(res.message || 'Vorgang wurde abgebrochen und bereinigt.', 'info');
+            setTimeout(() => this.refresh(), 1000);
+        } catch (e) {
+            UI.showToast('Fehler beim Abbrechen: ' + e.message, 'error');
+        }
+    },
     
     // ─── Service Actions ─────────────────────────────────────────────────
 

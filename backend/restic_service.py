@@ -141,6 +141,7 @@ async def run_restic_streamed(
     stderr_lines = []
 
     async with restic_lock:
+        proc = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -148,6 +149,9 @@ async def run_restic_streamed(
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
             )
+
+            from .job_manager import job_manager
+            job_manager.register_process(proc)
 
             async def _read_stream(stream, stream_name, lines_list):
                 async for raw_line in stream:
@@ -170,7 +174,8 @@ async def run_restic_streamed(
 
         except asyncio.TimeoutError:
             try:
-                proc.kill()
+                if proc:
+                    proc.kill()
             except Exception:
                 pass
             return {
@@ -180,6 +185,14 @@ async def run_restic_streamed(
                 "stderr": "\n".join(stderr_lines) + f"\nCommand timed out after {timeout}s",
                 "duration_seconds": timeout,
             }
+        except asyncio.CancelledError:
+            try:
+                if proc:
+                    proc.terminate()
+                    proc.kill()
+            except Exception:
+                pass
+            raise
         except Exception as e:
             return {
                 "success": False,
@@ -188,6 +201,10 @@ async def run_restic_streamed(
                 "stderr": str(e),
                 "duration_seconds": (datetime.now() - start).total_seconds(),
             }
+        finally:
+            from .job_manager import job_manager
+            if proc:
+                job_manager.unregister_process(proc)
 
     duration = (datetime.now() - start).total_seconds()
 
@@ -691,13 +708,73 @@ def _save_dr_report(report: dict):
         logger.warning(f"Konnte DR-Report nicht speichern: {e}")
 
 
+def clean_all_dr_sandboxes():
+    """Remove any temporary borgguard_dr_test directories across candidate locations."""
+    candidate_parents = ["/mnt/immich_extern/tmp", "/mnt/immich_old/tmp", "/tmp", "/var/tmp", "/app/tmp"]
+    for parent in candidate_parents:
+        try:
+            p = Path(parent)
+            if p.exists() and p.is_dir():
+                for item in p.glob("borgguard_dr_test_*"):
+                    try:
+                        if item.is_dir():
+                            shutil.rmtree(item, ignore_errors=True)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+
+def get_best_sandbox_location(required_bytes: int) -> tuple[Optional[str], int, int]:
+    """Find the candidate sandbox directory with the most free space.
+
+    Returns:
+        (best_dir, free_bytes, min_required_bytes)
+    """
+    candidates = [
+        "/mnt/immich_extern/tmp",
+        "/mnt/immich_old/tmp",
+        "/tmp",
+        "/var/tmp",
+        "/app/tmp",
+    ]
+    best_dir = None
+    max_free = -1
+
+    for c in candidates:
+        try:
+            path = Path(c)
+            check_path = path if path.exists() else path.parent
+            if check_path.exists():
+                usage = shutil.disk_usage(str(check_path))
+                if usage.free > max_free:
+                    max_free = usage.free
+                    best_dir = c
+        except Exception:
+            continue
+
+    min_required = required_bytes + (2 * 1024 * 1024 * 1024)
+    if max_free < min_required:
+        return None, max_free, min_required
+
+    try:
+        Path(best_dir).mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+    return best_dir, max_free, min_required
+
+
 async def run_dr_test(
     snapshot_id: Optional[str] = None,
     job=None,
     job_manager=None,
 ) -> dict:
-    """Run an automated sandbox restore test to verify backup integrity."""
+    """Run an automated sandbox restore test with pre-flight disk space checks and safe cleanup."""
     start_time = time.time()
+
+    # Always clean old/abandoned sandboxes first
+    clean_all_dr_sandboxes()
 
     # If no snapshot specified, find the latest snapshot
     if not snapshot_id:
@@ -711,11 +788,37 @@ async def run_dr_test(
         snapshot_id = sorted_snaps[0]["id"]
 
     short_id = snapshot_id[:8] if len(snapshot_id) >= 8 else snapshot_id
-    sandbox_dir = tempfile.mkdtemp(prefix=f"borgguard_dr_test_{short_id}_")
+
+    # 1. Check snapshot size and verify disk space
+    stats_res = await get_snapshot_stats(snapshot_id)
+    est_size = stats_res.get("data", {}).get("total_size", 0) if stats_res.get("success") and stats_res.get("data") else 0
+
+    sandbox_parent, free_bytes, min_needed = get_best_sandbox_location(est_size)
+    free_gb = round(max(0, free_bytes) / (1024 * 1024 * 1024), 2)
+    needed_gb = round(min_needed / (1024 * 1024 * 1024), 2)
+
+    if not sandbox_parent:
+        err = f"Nicht genügend freier Speicherplatz für den Sandbox-Restore (Verfügbar: {free_gb} GB, Benötigt: ca. {needed_gb} GB inkl. 2 GB Puffer). Test abgebrochen, um den Server vor Speicherüberlauf zu schützen."
+        if job and job_manager:
+            await job_manager.add_job_output(job, f"❌ FEHLER: {err}")
+        report = {
+            "status": "FAILED",
+            "last_tested": datetime.utcnow().isoformat() + "Z",
+            "snapshot_id": snapshot_id,
+            "short_id": short_id,
+            "files_verified": 0,
+            "bytes_verified": 0,
+            "duration_seconds": 0,
+            "message": err,
+        }
+        _save_dr_report(report)
+        return {"success": False, "error": err, "report": report}
+
+    sandbox_dir = tempfile.mkdtemp(prefix=f"borgguard_dr_test_{short_id}_", dir=sandbox_parent)
 
     if job and job_manager:
         await job_manager.update_progress(job, phase=f"Starte DR-Sandbox-Test für Snapshot {short_id}…", percent=10)
-        await job_manager.add_job_output(job, f"> DR-Test initialisiert in Sandbox: {sandbox_dir}")
+        await job_manager.add_job_output(job, f"> DR-Test initialisiert in Sandbox: {sandbox_dir} (Freier Speicher: {free_gb} GB)")
         await job_manager.add_job_output(job, f"> Verifiziere Wiederherstellbarkeit von Snapshot: {snapshot_id}")
 
     try:
@@ -791,13 +894,9 @@ async def run_dr_test(
             return {"success": False, "error": err, "report": report}
 
     finally:
-        try:
-            if os.path.exists(sandbox_dir):
-                shutil.rmtree(sandbox_dir, ignore_errors=True)
-                if job and job_manager:
-                    await job_manager.add_job_output(job, f"> Sandbox-Verzeichnis erfolgreich gelöscht.")
-        except Exception as e:
-            logger.warning(f"Konnte Sandbox nicht löschen: {e}")
+        clean_all_dr_sandboxes()
+        if job and job_manager:
+            await job_manager.add_job_output(job, f"> Sandbox-Verzeichnis erfolgreich bereinigt.")
 
 
 async def get_repo_info() -> dict:
