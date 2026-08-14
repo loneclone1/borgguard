@@ -789,22 +789,34 @@ const BorgGuard = {
 
         if (filterQuery) {
             // Global search in this snapshot
-            visibleItems = allFiles.filter(f => f.path.toLowerCase().includes(filterQuery) || f.name.toLowerCase().includes(filterQuery));
+            visibleItems = allFiles.filter(f => {
+                const p = (f.path || '').toLowerCase();
+                const n = (f.name || '').toLowerCase();
+                return p.includes(filterQuery) || n.includes(filterQuery);
+            });
         } else {
             // Folder view: direct children of currentPath
             const seen = new Set();
             for (const f of allFiles) {
+                if (!f.path) continue;
                 const p = f.path.startsWith('/') ? f.path : '/' + f.path;
+
                 if (normCurrent === '/') {
-                    // Top level items
-                    const trimmed = p.substring(1);
-                    const slashIdx = trimmed.indexOf('/');
+                    const withoutLead = p.substring(1);
+                    const slashIdx = withoutLead.indexOf('/');
                     if (slashIdx === -1) {
-                        // Directly in root
-                        visibleItems.push(f);
+                        // Direct child of root
+                        if (!seen.has(p)) {
+                            seen.add(p);
+                            visibleItems.push({
+                                ...f,
+                                path: p,
+                                name: f.name || withoutLead || p
+                            });
+                        }
                     } else {
-                        // Virtual folder or directory in root
-                        const dirName = trimmed.substring(0, slashIdx);
+                        // In a subdirectory, ensure the top-level directory is visible
+                        const dirName = withoutLead.substring(0, slashIdx);
                         const dirPath = '/' + dirName;
                         if (!seen.has(dirPath)) {
                             seen.add(dirPath);
@@ -814,33 +826,48 @@ const BorgGuard = {
                                 type: 'd',
                                 size: 0,
                                 mode: 'drwxr-xr-x',
-                                mtime: f.mtime
+                                mtime: f.mtime || ''
                             });
                         }
                     }
-                } else if (p.startsWith(normCurrent) && p !== normCurrent.slice(0, -1)) {
-                    const relative = p.substring(normCurrent.length);
-                    const slashIdx = relative.indexOf('/');
-                    if (slashIdx === -1) {
-                        // Direct child
-                        visibleItems.push(f);
-                    } else {
-                        // Subdirectory entry
-                        const dirName = relative.substring(0, slashIdx);
-                        const dirPath = normCurrent + dirName;
-                        if (!seen.has(dirPath)) {
-                            seen.add(dirPath);
-                            visibleItems.push({
-                                name: dirName,
-                                path: dirPath,
-                                type: 'd',
-                                size: 0,
-                                mode: 'drwxr-xr-x',
-                                mtime: f.mtime
-                            });
+                } else {
+                    if (p.startsWith(normCurrent)) {
+                        const relative = p.substring(normCurrent.length);
+                        if (!relative) continue; // the directory itself
+                        const slashIdx = relative.indexOf('/');
+                        if (slashIdx === -1) {
+                            // Direct child
+                            if (!seen.has(p)) {
+                                seen.add(p);
+                                visibleItems.push({
+                                    ...f,
+                                    path: p,
+                                    name: f.name || relative
+                                });
+                            }
+                        } else {
+                            // Subdirectory entry
+                            const dirName = relative.substring(0, slashIdx);
+                            const dirPath = normCurrent + dirName;
+                            if (!seen.has(dirPath)) {
+                                seen.add(dirPath);
+                                visibleItems.push({
+                                    name: dirName,
+                                    path: dirPath,
+                                    type: 'd',
+                                    size: 0,
+                                    mode: 'drwxr-xr-x',
+                                    mtime: f.mtime || ''
+                                });
+                            }
                         }
                     }
                 }
+            }
+
+            // Fallback: If folder view yields nothing at root, show flat items
+            if (visibleItems.length === 0 && currentPath === '/' && allFiles.length > 0) {
+                visibleItems = allFiles.slice(0, 100);
             }
         }
 

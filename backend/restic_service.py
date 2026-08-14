@@ -298,39 +298,75 @@ async def list_snapshots() -> dict:
     return res
 
 
+def _parse_restic_node(item: dict) -> dict:
+    """Helper to extract normalized file metadata from a restic node dict."""
+    node_type = item.get("type", "file")
+    type_code = "d" if node_type == "dir" else "f"
+    mode_val = item.get("mode", 0)
+    mode_str = oct(mode_val)[-4:] if isinstance(mode_val, int) else str(mode_val)
+    path = item.get("path", "")
+    name = item.get("name", "")
+    if not name and path:
+        name = Path(path).name or path
+
+    return {
+        "name": name,
+        "type": type_code,
+        "path": path,
+        "size": item.get("size", 0),
+        "mode": mode_str,
+        "mtime": item.get("mtime", ""),
+    }
+
+
 async def list_snapshot_files(snapshot_id: str) -> dict:
     """List all files and directories in a snapshot (cached)."""
     if snapshot_id in _snapshot_files_cache:
         return {"success": True, "files": _snapshot_files_cache[snapshot_id]}
 
-    res = await run_restic("ls", snapshot_id, capture_json=False)
+    # Run restic ls --json <snapshot_id>
+    res = await run_restic("ls", "--json", snapshot_id)
     if not res["success"]:
-        return {"success": False, "error": res.get("stderr", "Fehler beim Laden der Dateiliste"), "files": []}
+        # Fallback without --json if needed
+        res = await run_restic("ls", snapshot_id)
+        if not res["success"]:
+            return {"success": False, "error": res.get("stderr", "Fehler beim Laden der Dateiliste"), "files": []}
 
     files = []
-    for line in res["stdout"].splitlines():
-        line = line.strip()
+    stdout = res.get("stdout", "")
+
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
         if not line:
             continue
         try:
             item = json.loads(line)
+            # If line is a JSON array
+            if isinstance(item, list):
+                for subitem in item:
+                    if isinstance(subitem, dict) and subitem.get("struct_type") != "snapshot":
+                        files.append(_parse_restic_node(subitem))
+                continue
+
             # Skip top-level snapshot header
             if item.get("struct_type") == "snapshot":
                 continue
 
-            node_type = item.get("type", "file")
-            type_code = "d" if node_type == "dir" else "f"
-            mode_val = item.get("mode", 0)
-            mode_str = oct(mode_val)[-4:] if isinstance(mode_val, int) else str(mode_val)
-
-            files.append({
-                "name": item.get("name", ""),
-                "type": type_code,
-                "path": item.get("path", ""),
-                "size": item.get("size", 0),
-                "mode": mode_str,
-                "mtime": item.get("mtime", ""),
-            })
+            files.append(_parse_restic_node(item))
+        except json.JSONDecodeError:
+            # Fallback for plain-text lines (e.g. "/path/to/file")
+            if line.startswith("/"):
+                path_parts = line.rstrip("/").split("/")
+                name = path_parts[-1] if path_parts else line
+                is_dir = line.endswith("/")
+                files.append({
+                    "name": name,
+                    "type": "d" if is_dir else "f",
+                    "path": line,
+                    "size": 0,
+                    "mode": "drwxr-xr-x" if is_dir else "-rw-r--r--",
+                    "mtime": "",
+                })
         except Exception:
             continue
 
