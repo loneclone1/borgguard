@@ -30,6 +30,7 @@ from .restic_service import (
     dump_snapshot_file_stream,
     list_snapshot_files,
     list_snapshots,
+    modify_snapshot_tags,
     restore_snapshot,
     get_config,
     get_configured_repositories,
@@ -355,6 +356,50 @@ async def api_snapshot_restore(
 
     job = await job_manager.start_job(JobType.RESTORE, _run)
     return {"message": "Wiederherstellung gestartet", "job": job.to_dict()}
+
+
+# ─── Snapshot Tagging (Feature 4) ────────────────────────────────────────────
+
+class SnapshotTagsRequest(BaseModel):
+    action: str = "add"  # 'add', 'remove', 'set'
+    tags: list[str]
+
+
+@app.post("/api/snapshots/{snapshot_id}/tags")
+@app.post("/api/archives/{snapshot_id}/tags")
+async def api_modify_snapshot_tags(
+    snapshot_id: str,
+    body: SnapshotTagsRequest,
+    username: str = Depends(verify_credentials)
+):
+    """Add, remove, or set tags for a snapshot."""
+    global STATUS_CACHE_TIME
+    res = await modify_snapshot_tags(snapshot_id, body.action, body.tags)
+    if not res["success"]:
+        return JSONResponse(status_code=500, content={"error": res.get("stderr", "Fehler beim Bearbeiten der Tags")})
+
+    # Invalidate cache so fresh snapshot list with new tags is returned
+    STATUS_CACHE_TIME = 0.0
+    job_manager.last_known_archives = None
+    return {"success": True, "message": "Tags erfolgreich aktualisiert"}
+
+
+@app.delete("/api/snapshots/{snapshot_id}/tags/{tag}")
+@app.delete("/api/archives/{snapshot_id}/tags/{tag}")
+async def api_remove_single_tag(
+    snapshot_id: str,
+    tag: str,
+    username: str = Depends(verify_credentials)
+):
+    """Remove a single tag from a snapshot."""
+    global STATUS_CACHE_TIME
+    res = await modify_snapshot_tags(snapshot_id, "remove", [tag])
+    if not res["success"]:
+        return JSONResponse(status_code=500, content={"error": res.get("stderr", "Fehler beim Entfernen des Tags")})
+
+    STATUS_CACHE_TIME = 0.0
+    job_manager.last_known_archives = None
+    return {"success": True, "message": f"Tag '{tag}' entfernt"}
 
 
 # ─── Repository Info ─────────────────────────────────────────────────────────

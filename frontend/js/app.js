@@ -324,25 +324,25 @@ const BorgGuard = {
     },
     
     // ─── Snapshots Modal ─────────────────────────────────────────────────
+    _snapshotsCache: [],
+    _selectedTagFilter: '',
 
     async openSnapshotsModal() {
         document.getElementById('snapshots-modal').style.display = 'flex';
-        // We re-render the archives into the new table
         const tbody = document.getElementById('snapshots-tbody');
         if (!tbody) return;
-        
-        tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><div class="spinner"></div><p>Lade Snapshots…</p></div></td></tr>`;
-        
+
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="spinner"></div><p>Lade Snapshots…</p></div></td></tr>`;
+
         try {
             const archives = await api.getArchives();
             if (archives.success && archives.archives) {
-                // components.js should have a function to render these, or we do it here
-                UI.renderArchivesTable(archives.archives);
-                
+                this._snapshotsCache = archives.archives;
+                UI.renderArchivesTable(this._snapshotsCache, this._selectedTagFilter);
+
                 // Start calculating sizes sequentially in the background
                 (async () => {
                     for (const arch of archives.archives) {
-                        // If user closed the modal, stop calculating to save resources
                         if (document.getElementById('snapshots-modal').style.display === 'none') {
                             break;
                         }
@@ -351,12 +351,127 @@ const BorgGuard = {
                 })();
             }
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state" style="color:red">Fehler: ${e.message}</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state" style="color:red">Fehler: ${e.message}</div></td></tr>`;
         }
     },
-    
+
     closeSnapshotsModal() {
         document.getElementById('snapshots-modal').style.display = 'none';
+    },
+
+    filterSnapshotsByTag(tag) {
+        this._selectedTagFilter = tag || '';
+        UI.renderArchivesTable(this._snapshotsCache, this._selectedTagFilter);
+    },
+
+    // ─── Tag Management (Feature 4) ─────────────────────────────────────
+    _currentTagModalSnapId: null,
+    _currentTagModalTags: [],
+
+    openTagModal(snapshotId, tags = []) {
+        if (typeof tags === 'string') {
+            try { tags = JSON.parse(tags); } catch (e) { tags = []; }
+        }
+        this._currentTagModalSnapId = snapshotId;
+        this._currentTagModalTags = Array.isArray(tags) ? [...tags] : [];
+
+        document.getElementById('tag-snapshot-id').value = snapshotId;
+        document.getElementById('tag-modal-snap-id').innerText = snapshotId;
+        document.getElementById('tag-new-input').value = '';
+        this.renderTagModalChips();
+
+        document.getElementById('tag-modal').style.display = 'flex';
+        setTimeout(() => document.getElementById('tag-new-input').focus(), 50);
+    },
+
+    closeTagModal() {
+        document.getElementById('tag-modal').style.display = 'none';
+        this._currentTagModalSnapId = null;
+        this._currentTagModalTags = [];
+    },
+
+    renderTagModalChips() {
+        const container = document.getElementById('tag-modal-current-tags');
+        if (!container) return;
+
+        if (this._currentTagModalTags.length === 0) {
+            container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.82rem;">Keine Tags vorhanden</span>';
+            return;
+        }
+
+        let html = '';
+        for (const t of this._currentTagModalTags) {
+            html += `
+                <span class="tag-chip">
+                    🏷️ ${UI.escapeHtml(t)}
+                    <span class="chip-delete" onclick="BorgGuard.removeTagFromModal('${UI.escapeHtml(t)}')" title="Diesen Tag entfernen">×</span>
+                </span>`;
+        }
+        container.innerHTML = html;
+    },
+
+    async addNewTag() {
+        const input = document.getElementById('tag-new-input');
+        const tag = input.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+        if (!tag) {
+            UI.showToast('Bitte einen gültigen Tag-Namen eingeben.', 'error');
+            return;
+        }
+
+        if (this._currentTagModalTags.includes(tag)) {
+            UI.showToast(`Tag '${tag}' ist bereits vorhanden.`, 'info');
+            input.value = '';
+            return;
+        }
+
+        const snapshotId = this._currentTagModalSnapId;
+        try {
+            UI.showToast(`Füge Tag '${tag}' hinzu…`, 'info');
+            await api.updateSnapshotTags(snapshotId, 'add', [tag]);
+            this._currentTagModalTags.push(tag);
+            input.value = '';
+            this.renderTagModalChips();
+
+            // Update local snapshot cache
+            const snap = this._snapshotsCache.find(s => s.name === snapshotId || s.id === snapshotId);
+            if (snap) {
+                if (!Array.isArray(snap.tags)) snap.tags = [];
+                if (!snap.tags.includes(tag)) snap.tags.push(tag);
+            }
+            UI.renderArchivesTable(this._snapshotsCache, this._selectedTagFilter);
+            UI.showToast(`Tag '${tag}' erfolgreich hinzugefügt ✅`, 'success');
+        } catch (e) {
+            UI.showToast('Fehler beim Hinzufügen des Tags: ' + e.message, 'error');
+        }
+    },
+
+    async addPresetTag(presetName) {
+        document.getElementById('tag-new-input').value = presetName;
+        await this.addNewTag();
+    },
+
+    async removeTagFromModal(tag) {
+        const snapshotId = this._currentTagModalSnapId;
+        await this.removeSnapshotTag(snapshotId, tag);
+        this._currentTagModalTags = this._currentTagModalTags.filter(t => t !== tag);
+        this.renderTagModalChips();
+    },
+
+    async removeSnapshotTag(snapshotId, tag) {
+        try {
+            UI.showToast(`Entferne Tag '${tag}'…`, 'info');
+            await api.removeSnapshotTag(snapshotId, tag);
+
+            // Update local snapshot cache
+            const snap = this._snapshotsCache.find(s => s.name === snapshotId || s.id === snapshotId);
+            if (snap && Array.isArray(snap.tags)) {
+                snap.tags = snap.tags.filter(t => t !== tag);
+            }
+            UI.renderArchivesTable(this._snapshotsCache, this._selectedTagFilter);
+            UI.showToast(`Tag '${tag}' entfernt`, 'info');
+        } catch (e) {
+            UI.showToast('Fehler beim Entfernen des Tags: ' + e.message, 'error');
+        }
     },
 
 

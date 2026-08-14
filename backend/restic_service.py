@@ -374,6 +374,27 @@ async def list_snapshot_files(snapshot_id: str) -> dict:
     return {"success": True, "files": files}
 
 
+async def modify_snapshot_tags(snapshot_id: str, action: str, tags: List[str]) -> dict:
+    """Add, remove, or set tags on a snapshot via restic tag."""
+    if not tags:
+        return {"success": False, "error": "Keine Tags angegeben"}
+
+    valid_actions = {"add": "--add", "remove": "--remove", "set": "--set"}
+    flag = valid_actions.get(action.lower())
+    if not flag:
+        return {"success": False, "error": f"Ungültige Aktion: {action}. Erlaubt sind: add, remove, set"}
+
+    cmd_args = ["tag"]
+    for tag in tags:
+        tag_cleaned = tag.strip()
+        if tag_cleaned:
+            cmd_args.extend([flag, tag_cleaned])
+    cmd_args.append(snapshot_id)
+
+    res = await run_restic(*cmd_args)
+    return res
+
+
 async def dump_snapshot_file_stream(snapshot_id: str, file_path: str):
     """Generator yielding binary chunks of a file via restic dump."""
     cmd = ["restic", "dump", snapshot_id, file_path]

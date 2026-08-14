@@ -303,24 +303,32 @@
 
     <!-- Snapshots Modal -->
     <div class="modal-overlay" id="snapshots-modal" style="display: none;">
-        <div class="modal modal-large" style="max-width: 900px; width: 95%;">
+        <div class="modal modal-large" style="max-width: 950px; width: 95%;">
             <div class="modal-header">
                 <h2><span class="btn-icon">📋</span> Snapshots</h2>
                 <button class="close-btn" onclick="BorgGuard.closeSnapshotsModal()">✕</button>
             </div>
-            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+            <!-- Tag Filter Bar (Feature 4) -->
+            <div class="tag-filter-bar" id="snapshots-tag-filter-bar">
+                <div class="tag-filter-label">🏷️ Filter:</div>
+                <div class="tag-pills" id="snapshots-tag-pills">
+                    <span class="tag-pill active" onclick="BorgGuard.filterSnapshotsByTag('')">Alle</span>
+                </div>
+            </div>
+            <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
                 <table class="archive-table" id="snapshots-table" style="width: 100%;">
                     <thead>
                         <tr>
-                            <th>Name</th>
+                            <th>Name / ID</th>
                             <th>Datum</th>
+                            <th>Tags</th>
                             <th>Größe</th>
                             <th style="text-align:right;">Aktionen</th>
                         </tr>
                     </thead>
                     <tbody id="snapshots-tbody">
                         <tr>
-                            <td colspan="4">
+                            <td colspan="5">
                                 <div class="empty-state">
                                     <div class="empty-icon">📂</div>
                                     <p>Wird geladen…</p>
@@ -330,7 +338,53 @@
                     </tbody>
                 </table>
             </div>
-    <!-- Snapshot Explorer Modal (Feature 1) -->
+        </div>
+    </div>
+
+    <!-- Tag Management Modal (Feature 4) -->
+    <div class="modal-overlay" id="tag-modal" style="display: none; z-index: 1060;">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>🏷️ Tags verwalten</h2>
+                <button class="close-btn" onclick="BorgGuard.closeTagModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="tag-snapshot-id">
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+                    Snapshot: <strong id="tag-modal-snap-id" style="color: var(--accent-cyan); font-family: var(--font-mono);"></strong>
+                </div>
+
+                <!-- Current Tags -->
+                <div class="schedule-section">
+                    <label class="section-label">Aktuelle Tags</label>
+                    <div id="tag-modal-current-tags" class="tag-chips-container" style="min-height: 38px;">
+                        <span style="color: var(--text-muted); font-size: 0.82rem;">Keine Tags vorhanden</span>
+                    </div>
+                </div>
+
+                <!-- Add New Tag Input -->
+                <div class="schedule-section">
+                    <label class="section-label">Neuen Tag hinzufügen</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" class="cron-input" id="tag-new-input" placeholder="z.B. vor-upgrade" style="margin:0; flex:1;" onkeydown="if(event.key==='Enter') BorgGuard.addNewTag()">
+                        <button class="action-btn primary" onclick="BorgGuard.addNewTag()" style="padding: 0 16px;">➕ Hinzufügen</button>
+                    </div>
+                </div>
+
+                <!-- Quick Preset Chips -->
+                <div class="schedule-section" style="margin-top: 15px;">
+                    <label class="section-label">Vorschläge / Vorlagen</label>
+                    <div class="tag-preset-container">
+                        <span class="tag-preset" onclick="BorgGuard.addPresetTag('vor-upgrade')">+ vor-upgrade</span>
+                        <span class="tag-preset" onclick="BorgGuard.addPresetTag('monatsabschluss')">+ monatsabschluss</span>
+                        <span class="tag-preset" onclick="BorgGuard.addPresetTag('wichtig')">+ wichtig</span>
+                        <span class="tag-preset" onclick="BorgGuard.addPresetTag('manuell')">+ manuell</span>
+                        <span class="tag-preset" onclick="BorgGuard.addPresetTag('config-change')">+ config-change</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="modal-overlay" id="archive-modal" style="display: none;">
         <div class="modal modal-large" style="max-width: 1050px; width: 95%; height: 85vh; display: flex; flex-direction: column;">
             <div class="modal-header">

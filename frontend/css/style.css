@@ -1562,3 +1562,138 @@ body::before {
     font-size: 0.78rem;
     color: var(--text-secondary);
 }
+
+/* ── Snapshot Tagging (Feature 4) ─────────────────────────────────────── */
+.tag-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--terminal-surface);
+    border-bottom: 1px solid var(--terminal-border);
+    flex-wrap: wrap;
+}
+
+.tag-filter-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.tag-pills {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.tag-pill {
+    padding: 3px 10px;
+    font-size: 0.76rem;
+    background: var(--bg-card);
+    border: 1px solid var(--terminal-border);
+    border-radius: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    user-select: none;
+}
+
+.tag-pill:hover {
+    color: var(--accent-purple);
+    border-color: var(--accent-purple);
+    background: var(--bg-card-hover);
+}
+
+.tag-pill.active {
+    background: var(--accent-purple);
+    color: var(--terminal-bg);
+    border-color: var(--accent-purple);
+    font-weight: 600;
+}
+
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    background: hsla(270, 60%, 50%, 0.15);
+    border: 1px solid var(--accent-purple);
+    color: var(--accent-purple);
+    border-radius: var(--radius-sm);
+    margin: 2px 3px 2px 0;
+    white-space: nowrap;
+}
+
+.tag-badge .tag-remove {
+    cursor: pointer;
+    opacity: 0.7;
+    margin-left: 2px;
+    font-weight: bold;
+}
+
+.tag-badge .tag-remove:hover {
+    opacity: 1;
+    color: var(--accent-red);
+}
+
+.tag-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px;
+    background: var(--terminal-surface);
+    border: 1px solid var(--terminal-border);
+    border-radius: var(--radius-md);
+    min-height: 42px;
+    align-items: center;
+}
+
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    background: var(--bg-card);
+    border: 1px solid var(--accent-purple);
+    border-radius: var(--radius-sm);
+    color: var(--accent-purple);
+}
+
+.tag-chip .chip-delete {
+    cursor: pointer;
+    font-weight: bold;
+    color: var(--text-muted);
+    transition: color var(--transition-fast);
+}
+
+.tag-chip .chip-delete:hover {
+    color: var(--accent-red);
+}
+
+.tag-preset-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tag-preset {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 0.75rem;
+    background: var(--terminal-surface);
+    border: 1px dashed var(--terminal-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.tag-preset:hover {
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    background: var(--bg-card-hover);
+}

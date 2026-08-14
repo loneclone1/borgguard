@@ -128,5 +128,20 @@ const api = {
             body: JSON.stringify({ target_dir: targetDir, include_paths: includePaths }),
         });
     },
+
+    // ─── Snapshot Tagging (Feature 4) ───────────────────────────────────
+    async updateSnapshotTags(snapshotId, action, tags) {
+        return this.fetchJSON(`/api/snapshots/${encodeURIComponent(snapshotId)}/tags`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action, tags: tags }),
+        });
+    },
+
+    async removeSnapshotTag(snapshotId, tag) {
+        return this.fetchJSON(`/api/snapshots/${encodeURIComponent(snapshotId)}/tags/${encodeURIComponent(tag)}`, {
+            method: 'DELETE',
+        });
+    },
 };
 

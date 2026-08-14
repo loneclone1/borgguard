@@ -27,22 +27,67 @@ const UI = {
         }, 4000);
     },
     
-    renderArchivesTable(archives) {
+    renderArchivesTable(archives, selectedTag = '') {
         const tbody = document.getElementById('snapshots-tbody');
+        const pillsContainer = document.getElementById('snapshots-tag-pills');
         if (!tbody) return;
-        
+
         if (!archives || archives.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><p>Keine Snapshots gefunden.</p></div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><p>Keine Snapshots gefunden.</p></div></td></tr>`;
             return;
         }
-        
-        let html = '';
-        archives.sort((a, b) => new Date(b.start) - new Date(a.start));
-        
+
+        // Collect all unique tags
+        const allTags = new Set();
         for (const arch of archives) {
+            if (Array.isArray(arch.tags)) {
+                for (const t of arch.tags) {
+                    if (t) allTags.add(t);
+                }
+            }
+        }
+
+        // Render tag filter pills
+        if (pillsContainer) {
+            let pillsHtml = `<span class="tag-pill ${!selectedTag ? 'active' : ''}" onclick="BorgGuard.filterSnapshotsByTag('')">Alle (${archives.length})</span>`;
+            for (const t of Array.from(allTags).sort()) {
+                const count = archives.filter(a => Array.isArray(a.tags) && a.tags.includes(t)).length;
+                const isActive = selectedTag === t ? 'active' : '';
+                pillsHtml += `<span class="tag-pill ${isActive}" onclick="BorgGuard.filterSnapshotsByTag('${this.escapeHtml(t)}')">🏷️ ${this.escapeHtml(t)} (${count})</span>`;
+            }
+            pillsContainer.innerHTML = pillsHtml;
+        }
+
+        // Filter by selectedTag if active
+        let displayedArchives = archives;
+        if (selectedTag) {
+            displayedArchives = archives.filter(a => Array.isArray(a.tags) && a.tags.includes(selectedTag));
+        }
+
+        if (displayedArchives.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><p>Keine Snapshots mit Tag '<strong>${this.escapeHtml(selectedTag)}</strong>' gefunden.</p></div></td></tr>`;
+            return;
+        }
+
+        let html = '';
+        displayedArchives.sort((a, b) => new Date(b.start) - new Date(a.start));
+
+        for (const arch of displayedArchives) {
             const date = arch.start ? new Date(arch.start).toLocaleString('de-DE') : 'Unbekannt';
             const safeName = this.escapeHtml(arch.name);
-            
+            const tags = Array.isArray(arch.tags) ? arch.tags : [];
+
+            let tagsHtml = '';
+            for (const t of tags) {
+                const safeTag = this.escapeHtml(t);
+                tagsHtml += `
+                    <span class="tag-badge">
+                        🏷️ ${safeTag}
+                        <span class="tag-remove" onclick="event.stopPropagation(); BorgGuard.removeSnapshotTag('${safeName}', '${safeTag}')" title="Tag entfernen">×</span>
+                    </span>`;
+            }
+            tagsHtml += `<button class="explorer-btn" onclick="event.stopPropagation(); BorgGuard.openTagModal('${safeName}', ${this.escapeHtml(JSON.stringify(tags))})" title="Tag hinzufügen" style="padding:1px 6px; font-size:0.7rem; margin-top:2px;">+ Tag</button>`;
+
             html += `
             <tr>
                 <td>
@@ -51,6 +96,7 @@ const UI = {
                     </a>
                 </td>
                 <td class="date-cell">${date}</td>
+                <td>${tagsHtml}</td>
                 <td class="size-cell" id="size-${safeName}">—</td>
                 <td style="text-align:right;">
                     <div style="display:inline-flex; gap:6px; justify-content:flex-end;">
