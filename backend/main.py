@@ -383,11 +383,11 @@ async def api_snapshot_restore(
 
 class SnapshotTagsRequest(BaseModel):
     action: str = "add"  # 'add', 'remove', 'set'
-    tags: list[str]
+    tags: List[str] = []
 
 
-@app.post("/api/snapshots/{snapshot_id}/tags")
-@app.post("/api/archives/{snapshot_id}/tags")
+@app.post("/api/snapshots/{snapshot_id:path}/tags")
+@app.post("/api/archives/{snapshot_id:path}/tags")
 async def api_modify_snapshot_tags(
     snapshot_id: str,
     body: SnapshotTagsRequest,
@@ -396,17 +396,18 @@ async def api_modify_snapshot_tags(
     """Add, remove, or set tags for a snapshot."""
     global STATUS_CACHE_TIME
     res = await modify_snapshot_tags(snapshot_id, body.action, body.tags)
-    if not res["success"]:
-        return JSONResponse(status_code=500, content={"error": res.get("stderr", "Fehler beim Bearbeiten der Tags")})
+    if not res.get("success"):
+        return JSONResponse(status_code=500, content={"success": False, "error": res.get("stderr") or res.get("error") or "Fehler beim Bearbeiten der Tags"})
 
     # Invalidate cache so fresh snapshot list with new tags is returned
     STATUS_CACHE_TIME = 0.0
     job_manager.last_known_archives = None
-    return {"success": True, "message": "Tags erfolgreich aktualisiert"}
+    fresh = await list_snapshots()
+    return {"success": True, "message": "Tags erfolgreich aktualisiert", "archives": fresh.get("archives", [])}
 
 
-@app.delete("/api/snapshots/{snapshot_id}/tags/{tag}")
-@app.delete("/api/archives/{snapshot_id}/tags/{tag}")
+@app.delete("/api/snapshots/{snapshot_id:path}/tags/{tag}")
+@app.delete("/api/archives/{snapshot_id:path}/tags/{tag}")
 async def api_remove_single_tag(
     snapshot_id: str,
     tag: str,
@@ -415,12 +416,13 @@ async def api_remove_single_tag(
     """Remove a single tag from a snapshot."""
     global STATUS_CACHE_TIME
     res = await modify_snapshot_tags(snapshot_id, "remove", [tag])
-    if not res["success"]:
-        return JSONResponse(status_code=500, content={"error": res.get("stderr", "Fehler beim Entfernen des Tags")})
+    if not res.get("success"):
+        return JSONResponse(status_code=500, content={"success": False, "error": res.get("stderr") or res.get("error") or "Fehler beim Entfernen des Tags"})
 
     STATUS_CACHE_TIME = 0.0
     job_manager.last_known_archives = None
-    return {"success": True, "message": f"Tag '{tag}' entfernt"}
+    fresh = await list_snapshots()
+    return {"success": True, "message": f"Tag '{tag}' entfernt", "archives": fresh.get("archives", [])}
 
 
 # ─── Snapshot Diff & Search (Feature 2) ──────────────────────────────────────

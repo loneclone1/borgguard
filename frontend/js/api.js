@@ -3,10 +3,12 @@ const api = {
     async fetchJSON(url, options = {}) {
         const response = await fetch(url, options);
         if (!response.ok) {
-            let errorMsg = 'Netzwerkfehler';
+            let errorMsg = `HTTP-Fehler ${response.status}`;
             try {
                 const err = await response.json();
-                errorMsg = err.error || errorMsg;
+                if (err) {
+                    errorMsg = err.error || err.message || (typeof err.detail === 'string' ? err.detail : (Array.isArray(err.detail) ? err.detail.map(d => d.msg || JSON.stringify(d)).join(', ') : '')) || errorMsg;
+                }
             } catch (e) {}
             throw new Error(errorMsg);
         }

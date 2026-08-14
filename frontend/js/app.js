@@ -474,7 +474,7 @@ const BorgGuard = {
             return;
         }
 
-        const snapshotId = this._currentTagModalSnapId;
+        const snapshotId = this._currentTagModalSnapId || document.getElementById('tag-snapshot-id')?.value;
         if (!snapshotId) {
             UI.showToast('Kein Snapshot ausgewählt.', 'error');
             return;
@@ -488,12 +488,24 @@ const BorgGuard = {
                 input.value = '';
                 this.renderTagModalChips();
 
-                // Reload all snapshots to update IDs and tags
-                const archivesRes = await api.getArchives();
-                if (archivesRes.success && archivesRes.archives) {
-                    this._snapshotsCache = archivesRes.archives;
-                    UI.renderArchivesTable(this._snapshotsCache, this._selectedTagFilter);
+                // Update snapshot cache from response or API
+                if (res.archives && Array.isArray(res.archives)) {
+                    this._snapshotsCache = res.archives;
+                    const updatedSnap = res.archives.find(s => (s.tags && s.tags.includes(tag)) || s.name === snapshotId || s.id === snapshotId);
+                    if (updatedSnap) {
+                        this._currentTagModalSnapId = updatedSnap.short_id || updatedSnap.name || updatedSnap.id;
+                        const snapIdInput = document.getElementById('tag-snapshot-id');
+                        const snapIdLabel = document.getElementById('tag-modal-snap-id');
+                        if (snapIdInput) snapIdInput.value = this._currentTagModalSnapId;
+                        if (snapIdLabel) snapIdLabel.innerText = this._currentTagModalSnapId;
+                    }
+                } else {
+                    const archivesRes = await api.getArchives();
+                    if (archivesRes.success && archivesRes.archives) {
+                        this._snapshotsCache = archivesRes.archives;
+                    }
                 }
+                UI.renderArchivesTable(this._snapshotsCache, this._selectedTagFilter);
                 UI.showToast(`Tag '${tag}' erfolgreich hinzugefügt ✅`, 'success');
             } else {
                 UI.showToast(`Fehler: ${res.error || 'Konnte Tag nicht hinzufügen'}`, 'error');
@@ -504,12 +516,14 @@ const BorgGuard = {
     },
 
     async addPresetTag(presetName) {
-        document.getElementById('tag-new-input').value = presetName;
+        const input = document.getElementById('tag-new-input');
+        if (input) input.value = presetName;
         await this.addNewTag();
     },
 
     async removeTagFromModal(tag) {
-        const snapshotId = this._currentTagModalSnapId;
+        const snapshotId = this._currentTagModalSnapId || document.getElementById('tag-snapshot-id')?.value;
+        if (!snapshotId) return;
         await this.removeSnapshotTag(snapshotId, tag);
         this._currentTagModalTags = this._currentTagModalTags.filter(t => t !== tag);
         this.renderTagModalChips();
@@ -520,11 +534,23 @@ const BorgGuard = {
             UI.showToast(`Entferne Tag '${tag}'…`, 'info');
             const res = await api.removeSnapshotTag(snapshotId, tag);
             if (res.success) {
-                const archivesRes = await api.getArchives();
-                if (archivesRes.success && archivesRes.archives) {
-                    this._snapshotsCache = archivesRes.archives;
-                    UI.renderArchivesTable(this._snapshotsCache, this._selectedTagFilter);
+                if (res.archives && Array.isArray(res.archives)) {
+                    this._snapshotsCache = res.archives;
+                    const updatedSnap = res.archives.find(s => s.name === snapshotId || s.id === snapshotId);
+                    if (updatedSnap) {
+                        this._currentTagModalSnapId = updatedSnap.short_id || updatedSnap.name || updatedSnap.id;
+                        const snapIdInput = document.getElementById('tag-snapshot-id');
+                        const snapIdLabel = document.getElementById('tag-modal-snap-id');
+                        if (snapIdInput) snapIdInput.value = this._currentTagModalSnapId;
+                        if (snapIdLabel) snapIdLabel.innerText = this._currentTagModalSnapId;
+                    }
+                } else {
+                    const archivesRes = await api.getArchives();
+                    if (archivesRes.success && archivesRes.archives) {
+                        this._snapshotsCache = archivesRes.archives;
+                    }
                 }
+                UI.renderArchivesTable(this._snapshotsCache, this._selectedTagFilter);
                 UI.showToast(`Tag '${tag}' entfernt ✅`, 'success');
             } else {
                 UI.showToast(`Fehler: ${res.error || 'Konnte Tag nicht entfernen'}`, 'error');
