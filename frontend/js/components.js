@@ -67,7 +67,7 @@ const UI = {
             
             let updateBtn = '';
             if (data.project_id && data.project_id !== 'other') {
-                updateBtn = `<button onclick="event.stopPropagation(); BorgGuard.updateProject('${data.project_id}')" title="Ganzes Projekt '${data.name}' updaten (pull & up)" class="action-btn-small" style="background:var(--accent-cyan);color:var(--bg-app);border:none;margin-left:10px;">⬇️ Update</button>`;
+                updateBtn = `<button onclick="event.stopPropagation(); BorgGuard.updateProject('${data.project_id}')" title="Ganzes Projekt '${data.name}' updaten (pull & up)" class="action-btn-small" style="background:var(--accent-cyan);color:var(--terminal-bg);border:none;margin-left:10px;">⬇️ Update</button>`;
             }
             
             let groupHtml = `<div class="service-group">
@@ -200,6 +200,7 @@ const UI = {
         if (hw.extra_mounts && hw.extra_mounts.length > 0) {
             for (const mount of hw.extra_mounts) {
                 if (mount.mountpoint === '/') continue; // skip root, already shown
+                if (mount.mountpoint === '/app/logs') continue; // hide /app/logs volume
                 const mUsedGB = (mount.used / 1024**3).toFixed(1);
                 const mTotalGB = (mount.total / 1024**3).toFixed(1);
                 const mFreeGB = (mount.free / 1024**3).toFixed(1);

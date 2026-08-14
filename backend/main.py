@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="BorgGuard by JB",
     description="Backup-Management-Dashboard für Restic",
-    version="1.1.0",
+    version="1.2.0",
     lifespan=lifespan,
 )
 
