@@ -685,6 +685,292 @@ const BorgGuard = {
             UI.showToast('Fehler beim Speichern: ' + e.message, 'error');
         }
     },
+
+    // ─── Snapshot Explorer & Restore (Feature 1) ────────────────────────
+    _explorer: {
+        snapshotId: null,
+        allFiles: [],
+        currentPath: '/',
+        filterQuery: '',
+    },
+
+    async openArchive(snapshotId) {
+        this._explorer.snapshotId = snapshotId;
+        this._explorer.currentPath = '/';
+        this._explorer.filterQuery = '';
+        this._explorer.allFiles = [];
+
+        const modal = document.getElementById('archive-modal');
+        const titleEl = document.getElementById('archive-modal-title');
+        const subtitleEl = document.getElementById('archive-modal-subtitle');
+        const filterInput = document.getElementById('archive-filter-input');
+        const table = document.getElementById('archive-files-table');
+        const loading = document.getElementById('archive-loading');
+
+        if (titleEl) titleEl.innerText = `Snapshot Explorer: ${snapshotId}`;
+        if (subtitleEl) subtitleEl.innerText = 'Lade Dateibaum…';
+        if (filterInput) filterInput.value = '';
+        if (loading) {
+            loading.style.display = 'block';
+            loading.innerHTML = '<div class="spinner" style="margin: 0 auto 15px auto;"></div><p>Lade Dateiindex des Snapshots…</p>';
+        }
+        if (table) table.style.display = 'none';
+        if (modal) modal.style.display = 'flex';
+
+        try {
+            const res = await api.getSnapshotFiles(snapshotId);
+            if (res.success && res.files) {
+                this._explorer.allFiles = res.files;
+                if (subtitleEl) subtitleEl.innerText = `${res.files.length.toLocaleString('de-DE')} indexierte Dateien & Ordner`;
+                this.renderExplorerView();
+            } else {
+                if (loading) loading.innerHTML = `<p style="color:var(--accent-red)">Fehler beim Lesen des Snapshots: ${UI.escapeHtml(res.error || 'Unbekannt')}</p>`;
+            }
+        } catch (e) {
+            if (loading) loading.innerHTML = `<p style="color:var(--accent-red)">Fehler beim Laden: ${UI.escapeHtml(e.message)}</p>`;
+        }
+    },
+
+    closeArchiveModal() {
+        const modal = document.getElementById('archive-modal');
+        if (modal) modal.style.display = 'none';
+    },
+
+    navigateToExplorerPath(path) {
+        this._explorer.currentPath = path || '/';
+        this._explorer.filterQuery = '';
+        const filterInput = document.getElementById('archive-filter-input');
+        if (filterInput) filterInput.value = '';
+        this.renderExplorerView();
+    },
+
+    filterExplorerFiles(query) {
+        this._explorer.filterQuery = (query || '').trim().toLowerCase();
+        this.renderExplorerView();
+    },
+
+    renderExplorerView() {
+        const { snapshotId, allFiles, currentPath, filterQuery } = this._explorer;
+        const breadcrumbsEl = document.getElementById('archive-breadcrumbs');
+        const table = document.getElementById('archive-files-table');
+        const tbody = document.getElementById('archive-files-tbody');
+        const loading = document.getElementById('archive-loading');
+        const countEl = document.getElementById('explorer-item-count');
+        const sizeEl = document.getElementById('explorer-selected-size');
+
+        if (!allFiles || allFiles.length === 0) {
+            if (loading) {
+                loading.style.display = 'block';
+                loading.innerHTML = '<p>Dieser Snapshot enthält keine Dateien oder ist leer.</p>';
+            }
+            if (table) table.style.display = 'none';
+            return;
+        }
+
+        // Render Breadcrumbs
+        if (breadcrumbsEl) {
+            const parts = currentPath.split('/').filter(Boolean);
+            let crumbHtml = `<span class="crumb ${parts.length === 0 ? 'active' : ''}" onclick="BorgGuard.navigateToExplorerPath('/')">root</span>`;
+            let accumulated = '';
+            for (let i = 0; i < parts.length; i++) {
+                accumulated += '/' + parts[i];
+                const isLast = (i === parts.length - 1 && !filterQuery);
+                crumbHtml += `<span class="separator">/</span><span class="crumb ${isLast ? 'active' : ''}" onclick="BorgGuard.navigateToExplorerPath('${UI.escapeHtml(accumulated)}')">${UI.escapeHtml(parts[i])}</span>`;
+            }
+            if (filterQuery) {
+                crumbHtml += `<span class="separator">/</span><span class="crumb active">🔍 Suche: "${UI.escapeHtml(filterQuery)}"</span>`;
+            }
+            breadcrumbsEl.innerHTML = crumbHtml;
+        }
+
+        // Filter items
+        let visibleItems = [];
+        const normCurrent = currentPath === '/' ? '/' : (currentPath.endsWith('/') ? currentPath : currentPath + '/');
+
+        if (filterQuery) {
+            // Global search in this snapshot
+            visibleItems = allFiles.filter(f => f.path.toLowerCase().includes(filterQuery) || f.name.toLowerCase().includes(filterQuery));
+        } else {
+            // Folder view: direct children of currentPath
+            const seen = new Set();
+            for (const f of allFiles) {
+                const p = f.path.startsWith('/') ? f.path : '/' + f.path;
+                if (normCurrent === '/') {
+                    // Top level items
+                    const trimmed = p.substring(1);
+                    const slashIdx = trimmed.indexOf('/');
+                    if (slashIdx === -1) {
+                        // Directly in root
+                        visibleItems.push(f);
+                    } else {
+                        // Virtual folder or directory in root
+                        const dirName = trimmed.substring(0, slashIdx);
+                        const dirPath = '/' + dirName;
+                        if (!seen.has(dirPath)) {
+                            seen.add(dirPath);
+                            visibleItems.push({
+                                name: dirName,
+                                path: dirPath,
+                                type: 'd',
+                                size: 0,
+                                mode: 'drwxr-xr-x',
+                                mtime: f.mtime
+                            });
+                        }
+                    }
+                } else if (p.startsWith(normCurrent) && p !== normCurrent.slice(0, -1)) {
+                    const relative = p.substring(normCurrent.length);
+                    const slashIdx = relative.indexOf('/');
+                    if (slashIdx === -1) {
+                        // Direct child
+                        visibleItems.push(f);
+                    } else {
+                        // Subdirectory entry
+                        const dirName = relative.substring(0, slashIdx);
+                        const dirPath = normCurrent + dirName;
+                        if (!seen.has(dirPath)) {
+                            seen.add(dirPath);
+                            visibleItems.push({
+                                name: dirName,
+                                path: dirPath,
+                                type: 'd',
+                                size: 0,
+                                mode: 'drwxr-xr-x',
+                                mtime: f.mtime
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort: directories first, then alphabetically
+        visibleItems.sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'd' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        if (loading) loading.style.display = 'none';
+        if (table) table.style.display = 'table';
+
+        let html = '';
+
+        // Add parent directory row ("..") if inside a subfolder
+        if (!filterQuery && currentPath !== '/') {
+            const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/';
+            html += `
+            <tr class="explorer-row is-dir" onclick="BorgGuard.navigateToExplorerPath('${UI.escapeHtml(parentPath)}')">
+                <td style="text-align:center;"><span class="explorer-icon">📁</span></td>
+                <td class="explorer-name" style="font-weight:600; color:var(--accent-cyan);">..</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td style="text-align:right;"></td>
+            </tr>`;
+        }
+
+        let totalSize = 0;
+        for (const item of visibleItems) {
+            totalSize += item.size || 0;
+            const isDir = item.type === 'd';
+            const icon = isDir ? '📁' : this.getFileIcon(item.name);
+            const sizeStr = isDir ? '—' : UI.formatBytes(item.size);
+            const dateStr = item.mtime ? new Date(item.mtime).toLocaleString('de-DE') : '—';
+            const displayPath = filterQuery ? item.path : item.name;
+
+            const clickAction = isDir
+                ? `BorgGuard.navigateToExplorerPath('${UI.escapeHtml(item.path)}')`
+                : `BorgGuard.downloadFile('${UI.escapeHtml(snapshotId)}', '${UI.escapeHtml(item.path)}')`;
+
+            const actionsHtml = isDir
+                ? `<button class="explorer-btn" onclick="event.stopPropagation(); BorgGuard.openRestoreModal('${UI.escapeHtml(snapshotId)}', '${UI.escapeHtml(item.path)}')" title="Diesen Ordner wiederherstellen">🔄 Restore</button>`
+                : `
+                    <button class="explorer-btn" onclick="event.stopPropagation(); BorgGuard.downloadFile('${UI.escapeHtml(snapshotId)}', '${UI.escapeHtml(item.path)}')" title="Datei herunterladen">⬇️ Download</button>
+                    <button class="explorer-btn" onclick="event.stopPropagation(); BorgGuard.openRestoreModal('${UI.escapeHtml(snapshotId)}', '${UI.escapeHtml(item.path)}')" title="Diese Datei wiederherstellen">🔄</button>
+                `;
+
+            html += `
+            <tr class="explorer-row ${isDir ? 'is-dir' : ''}" onclick="${clickAction}">
+                <td style="text-align:center;"><span class="explorer-icon">${icon}</span></td>
+                <td class="explorer-name" title="${UI.escapeHtml(item.path)}">${UI.escapeHtml(displayPath)}</td>
+                <td class="size-cell" style="font-family:var(--font-mono); font-size:0.8rem;">${sizeStr}</td>
+                <td style="font-family:var(--font-mono); font-size:0.75rem; color:var(--text-secondary);">${UI.escapeHtml(item.mode || '')}</td>
+                <td class="date-cell" style="font-size:0.8rem;">${dateStr}</td>
+                <td style="text-align:right; white-space:nowrap;">${actionsHtml}</td>
+            </tr>`;
+        }
+
+        if (visibleItems.length === 0) {
+            html += `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Keine Dateien in diesem Verzeichnis gefunden.</td></tr>`;
+        }
+
+        if (tbody) tbody.innerHTML = html;
+        if (countEl) countEl.innerText = `${visibleItems.length} Elemente`;
+        if (sizeEl) sizeEl.innerText = totalSize > 0 ? `Gesamt: ${UI.formatBytes(totalSize)}` : '';
+    },
+
+    getFileIcon(filename) {
+        if (!filename) return '📄';
+        const ext = filename.split('.').pop().toLowerCase();
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) return '🖼️';
+        if (['mp4', 'mkv', 'avi', 'mov', 'webm'].includes(ext)) return '🎬';
+        if (['mp3', 'wav', 'flac', 'ogg', 'm4a'].includes(ext)) return '🎵';
+        if (['zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar'].includes(ext)) return '📦';
+        if (['json', 'yaml', 'yml', 'toml', 'xml', 'ini', 'env', 'conf', 'config'].includes(ext)) return '⚙️';
+        if (['py', 'js', 'html', 'css', 'ts', 'sh', 'php', 'sql', 'cpp', 'c', 'go', 'rs'].includes(ext)) return '📜';
+        if (['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'odt'].includes(ext)) return '📝';
+        return '📄';
+    },
+
+    downloadFile(snapshotId, filePath) {
+        const url = api.getDownloadFileUrl(snapshotId, filePath);
+        window.open(url, '_blank');
+        UI.showToast(`Download gestartet: ${filePath.split('/').pop()}`, 'info');
+    },
+
+    openRestoreModal(snapshotId = null, includePath = '') {
+        const targetSnapId = snapshotId || this._explorer.snapshotId;
+        if (!targetSnapId) {
+            UI.showToast('Kein Snapshot ausgewählt.', 'error');
+            return;
+        }
+        document.getElementById('restore-snapshot-id').value = targetSnapId;
+        document.getElementById('restore-include-path').value = includePath || '';
+        document.getElementById('restore-modal').style.display = 'flex';
+    },
+
+    closeRestoreModal() {
+        document.getElementById('restore-modal').style.display = 'none';
+    },
+
+    async confirmRestore() {
+        const snapshotId = document.getElementById('restore-snapshot-id').value.trim();
+        const includePath = document.getElementById('restore-include-path').value.trim();
+        const targetDir = document.getElementById('restore-target-dir').value.trim() || '/restore';
+
+        if (!snapshotId) {
+            UI.showToast('Ungültige Snapshot-ID.', 'error');
+            return;
+        }
+
+        const includePaths = includePath ? [includePath] : null;
+        const confirmMsg = includePath
+            ? `Möchtest du den Pfad '${includePath}' aus Snapshot '${snapshotId}' wirklich nach '${targetDir}' auf dem Server wiederherstellen?`
+            : `Möchtest du das GESAMTE Backup aus Snapshot '${snapshotId}' nach '${targetDir}' auf dem Server wiederherstellen?`;
+
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            UI.showToast('Wiederherstellung wird gestartet…', 'info');
+            const res = await api.restoreSnapshot(snapshotId, targetDir, includePaths);
+            this.closeRestoreModal();
+            this.closeArchiveModal();
+            UI.showToast(res.message || 'Wiederherstellung läuft!', 'success');
+            setTimeout(() => this.refresh(), 1000);
+        } catch (e) {
+            UI.showToast('Fehler beim Starten der Wiederherstellung: ' + e.message, 'error');
+        }
+    },
 };
 
 

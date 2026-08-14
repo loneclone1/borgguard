@@ -16,7 +16,7 @@ import shutil
 import docker
 
 from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -27,7 +27,10 @@ from .restic_service import (
     unlock_repo as break_lock,
     check_repo as check_integrity,
     create_backup,
+    dump_snapshot_file_stream,
+    list_snapshot_files,
     list_snapshots,
+    restore_snapshot,
     get_config,
     get_configured_repositories,
     get_repo_info,
@@ -278,12 +281,80 @@ async def api_archives(username: str = Depends(verify_credentials)):
 @app.get("/api/archives/{archive_name}/stats")
 async def api_archive_stats(archive_name: str, username: str = Depends(verify_credentials)):
     """Get size stats for a specific archive (snapshot)."""
-    # Import the new function dynamically or from restic_service
     from .restic_service import get_snapshot_stats
     result = await get_snapshot_stats(archive_name)
     if not result["success"]:
         return JSONResponse(status_code=500, content={"error": result.get("stderr", "Fehler beim Lesen der Statistiken")})
     return {"stats": result.get("data", {})}
+
+
+@app.get("/api/snapshots/{snapshot_id}/files")
+@app.get("/api/archives/{snapshot_id}/files")
+async def api_snapshot_files(snapshot_id: str, username: str = Depends(verify_credentials)):
+    """List all files in a specific snapshot."""
+    res = await list_snapshot_files(snapshot_id)
+    if not res["success"]:
+        return JSONResponse(status_code=500, content={"error": res.get("error", "Fehler beim Laden der Dateiliste")})
+    return {"success": True, "files": res["files"]}
+
+
+@app.get("/api/snapshots/{snapshot_id}/download")
+@app.get("/api/archives/{snapshot_id}/download")
+async def api_snapshot_download(
+    snapshot_id: str,
+    path: str = Query(..., description="Path to file in snapshot"),
+    username: str = Depends(verify_credentials)
+):
+    """Download/stream a single file from a snapshot."""
+    filename = Path(path).name or "download"
+    encoded_filename = filename.replace('"', '\\"')
+    headers = {
+        "Content-Disposition": f'attachment; filename="{encoded_filename}"',
+        "Content-Type": "application/octet-stream"
+    }
+    return StreamingResponse(dump_snapshot_file_stream(snapshot_id, path), headers=headers)
+
+
+class SnapshotRestoreRequest(BaseModel):
+    target_dir: str = "/restore"
+    include_paths: list[str] | None = None
+
+
+@app.post("/api/snapshots/{snapshot_id}/restore")
+@app.post("/api/archives/{snapshot_id}/restore")
+async def api_snapshot_restore(
+    snapshot_id: str,
+    body: SnapshotRestoreRequest,
+    username: str = Depends(verify_credentials)
+):
+    """Restore a snapshot or selected files to target_dir (runs in background)."""
+    if job_manager.is_busy():
+        return JSONResponse(
+            status_code=409,
+            content={"error": "Ein Job läuft bereits", "current_job": job_manager.current_job.to_dict()},
+        )
+
+    target_dir = body.target_dir.strip() or "/restore"
+    include_paths = body.include_paths or []
+
+    async def _run():
+        global STATUS_CACHE_TIME
+        job = job_manager.current_job
+        result = await restore_snapshot(
+            snapshot_id=snapshot_id,
+            target_dir=target_dir,
+            include_paths=include_paths,
+            job=job,
+            job_manager=job_manager
+        )
+        if result.get("stdout") or result.get("stderr"):
+            lines = (result.get("stdout", "") + "\n" + result.get("stderr", "")).splitlines()
+            write_job_log("restore", lines)
+        STATUS_CACHE_TIME = 0.0
+        return result
+
+    job = await job_manager.start_job(JobType.RESTORE, _run)
+    return {"message": "Wiederherstellung gestartet", "job": job.to_dict()}
 
 
 # ─── Repository Info ─────────────────────────────────────────────────────────

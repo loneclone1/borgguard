@@ -111,5 +111,22 @@ const api = {
             method: 'DELETE',
         });
     },
+
+    // ─── Snapshot Explorer & Restore ────────────────────────────────────
+    async getSnapshotFiles(snapshotId) {
+        return this.fetchJSON(`/api/snapshots/${encodeURIComponent(snapshotId)}/files`);
+    },
+
+    getDownloadFileUrl(snapshotId, filePath) {
+        return `/api/snapshots/${encodeURIComponent(snapshotId)}/download?path=${encodeURIComponent(filePath)}`;
+    },
+
+    async restoreSnapshot(snapshotId, targetDir = '/restore', includePaths = null) {
+        return this.fetchJSON(`/api/snapshots/${encodeURIComponent(snapshotId)}/restore`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_dir: targetDir, include_paths: includePaths }),
+        });
+    },
 };
 

@@ -17,6 +17,8 @@ class JobType(str, Enum):
     CHECK = "check"
     PRUNE = "prune"
     COMPACT = "compact"
+    RESTORE = "restore"
+    DR_TEST = "dr_test"
     OTHER = "other"
 
 

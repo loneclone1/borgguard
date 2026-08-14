@@ -273,19 +273,131 @@ async def create_backup(verbosity: int = 1, job=None, job_manager=None) -> dict:
         }
 
 
+_snapshot_files_cache: dict = {}
+
+
 async def list_snapshots() -> dict:
-    """List all restic snapshots."""
+    """List all restic snapshots with full metadata."""
     res = await run_restic("snapshots", capture_json=True)
     if res["success"] and res.get("data"):
         transformed = []
         for snap in res["data"]:
             transformed.append({
+                "id": snap.get("id", ""),
+                "short_id": snap.get("short_id", snap.get("id", "")[:8]),
                 "name": snap.get("short_id", snap.get("id", "")[:8]),
                 "start": snap.get("time"),
+                "time": snap.get("time"),
+                "paths": snap.get("paths", []),
+                "tags": snap.get("tags", []),
+                "hostname": snap.get("hostname", ""),
+                "username": snap.get("username", ""),
                 "duration": 0,
             })
         res["data"] = transformed
     return res
+
+
+async def list_snapshot_files(snapshot_id: str) -> dict:
+    """List all files and directories in a snapshot (cached)."""
+    if snapshot_id in _snapshot_files_cache:
+        return {"success": True, "files": _snapshot_files_cache[snapshot_id]}
+
+    res = await run_restic("ls", snapshot_id, capture_json=False)
+    if not res["success"]:
+        return {"success": False, "error": res.get("stderr", "Fehler beim Laden der Dateiliste"), "files": []}
+
+    files = []
+    for line in res["stdout"].splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+            # Skip top-level snapshot header
+            if item.get("struct_type") == "snapshot":
+                continue
+
+            node_type = item.get("type", "file")
+            type_code = "d" if node_type == "dir" else "f"
+            mode_val = item.get("mode", 0)
+            mode_str = oct(mode_val)[-4:] if isinstance(mode_val, int) else str(mode_val)
+
+            files.append({
+                "name": item.get("name", ""),
+                "type": type_code,
+                "path": item.get("path", ""),
+                "size": item.get("size", 0),
+                "mode": mode_str,
+                "mtime": item.get("mtime", ""),
+            })
+        except Exception:
+            continue
+
+    _snapshot_files_cache[snapshot_id] = files
+    return {"success": True, "files": files}
+
+
+async def dump_snapshot_file_stream(snapshot_id: str, file_path: str):
+    """Generator yielding binary chunks of a file via restic dump."""
+    cmd = ["restic", "dump", snapshot_id, file_path]
+    env = os.environ.copy()
+    env["RESTIC_REPOSITORY"] = config.RESTIC_REPOSITORY
+    env["RESTIC_PASSWORD"] = config.RESTIC_PASSWORD
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
+    )
+
+    try:
+        while True:
+            chunk = await proc.stdout.read(65536)
+            if not chunk:
+                break
+            yield chunk
+        await proc.wait()
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        raise
+
+
+async def restore_snapshot(
+    snapshot_id: str,
+    target_dir: str,
+    include_paths: Optional[List[str]] = None,
+    job=None,
+    job_manager=None,
+) -> dict:
+    """Restore a snapshot or specific paths to target_dir with real-time progress."""
+    if job and job_manager:
+        await job_manager.update_progress(job, phase="Bereite Wiederherstellung vor…", percent=5)
+        await job_manager.add_job_output(job, f"> restic restore {snapshot_id} --target {target_dir}")
+
+    cmd_args = ["restore", snapshot_id, "--target", target_dir]
+    if include_paths:
+        for p in include_paths:
+            if p and p.strip():
+                cmd_args.extend(["--include", p.strip()])
+
+    async def _on_line(stream, line):
+        if job and job_manager:
+            prefix = "" if stream == "stdout" else "STDERR: "
+            await job_manager.add_job_output(job, f"{prefix}{line}")
+            prog = parse_restic_progress(line)
+            if prog:
+                await job_manager.update_progress(
+                    job,
+                    phase=prog.get("status", "Wiederherstellung läuft…"),
+                    percent=max(10, min(95, prog["percent"])),
+                )
+
+    return await run_restic_streamed(*cmd_args, on_line=_on_line)
 
 
 async def get_repo_info() -> dict:

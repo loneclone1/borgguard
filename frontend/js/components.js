@@ -41,14 +41,22 @@ const UI = {
         
         for (const arch of archives) {
             const date = arch.start ? new Date(arch.start).toLocaleString('de-DE') : 'Unbekannt';
+            const safeName = this.escapeHtml(arch.name);
             
             html += `
             <tr>
-                <td><strong>${arch.name}</strong></td>
+                <td>
+                    <a class="archive-link" onclick="BorgGuard.openArchive('${safeName}')" style="cursor:pointer; font-weight:600; color:var(--accent-cyan);">
+                        ${safeName}
+                    </a>
+                </td>
                 <td class="date-cell">${date}</td>
-                <td class="size-cell" id="size-${arch.name}">—</td>
+                <td class="size-cell" id="size-${safeName}">—</td>
                 <td style="text-align:right;">
-                    <button class="action-btn-small" onclick="BorgGuard.openGoogleDrive()" title="In Google Drive öffnen">☁️ Google Drive</button>
+                    <div style="display:inline-flex; gap:6px; justify-content:flex-end;">
+                        <button class="action-btn-small" onclick="BorgGuard.openArchive('${safeName}')" title="Dateien dieses Snapshots durchsuchen">📂 Explorer</button>
+                        <button class="action-btn-small" onclick="BorgGuard.openRestoreModal('${safeName}')" title="Snapshot auf Server wiederherstellen" style="background:var(--accent-green); color:var(--terminal-bg); border:none;">🔄 Restore</button>
+                    </div>
                 </td>
             </tr>`;
         }

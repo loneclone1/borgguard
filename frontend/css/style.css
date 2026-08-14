@@ -1430,3 +1430,135 @@ body::before {
     border-top: 1px solid var(--glass-border);
     margin-top: var(--space-md);
 }
+
+/* ── Snapshot Explorer (Feature 1) ────────────────────────────────────── */
+.explorer-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--terminal-surface);
+    border-bottom: 1px solid var(--terminal-border);
+    flex-wrap: wrap;
+}
+
+.explorer-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.explorer-breadcrumbs .crumb {
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.explorer-breadcrumbs .crumb:hover {
+    color: var(--accent-cyan);
+    background: var(--bg-card-hover);
+}
+
+.explorer-breadcrumbs .crumb.active {
+    color: var(--accent-cyan);
+    font-weight: 600;
+}
+
+.explorer-breadcrumbs .separator {
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.explorer-search-wrapper {
+    min-width: 220px;
+}
+
+.explorer-filter {
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    height: 32px;
+}
+
+.explorer-table {
+    border-collapse: collapse;
+}
+
+.explorer-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+    z-index: 10;
+    box-shadow: 0 1px 0 var(--terminal-border);
+}
+
+.explorer-table td {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    border-bottom: 1px solid var(--terminal-border);
+}
+
+.explorer-row {
+    transition: background var(--transition-fast);
+}
+
+.explorer-row:hover {
+    background: var(--terminal-surface);
+}
+
+.explorer-row.is-dir {
+    cursor: pointer;
+}
+
+.explorer-row.is-dir:hover td.explorer-name {
+    color: var(--accent-cyan);
+}
+
+.explorer-icon {
+    font-size: 1.1rem;
+    vertical-align: middle;
+}
+
+.explorer-name {
+    font-family: var(--font-mono);
+    font-size: 0.84rem;
+    word-break: break-all;
+}
+
+.explorer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--terminal-surface);
+    border: 1px solid var(--terminal-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.explorer-btn:hover {
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    background: var(--bg-card-hover);
+}
+
+.explorer-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--terminal-surface);
+    border-top: 1px solid var(--terminal-border);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
