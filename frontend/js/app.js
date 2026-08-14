@@ -1549,6 +1549,235 @@ const BorgGuard = {
             UI.showToast('Fehler beim Starten des DR-Tests: ' + e.message, 'error');
         }
     },
+
+    // ─── Help & Manual Modal ─────────────────────────────────────────────
+    openHelpModal(tab = 'overview') {
+        this.switchHelpTab(tab);
+        document.getElementById('help-modal').style.display = 'flex';
+    },
+
+    closeHelpModal() {
+        document.getElementById('help-modal').style.display = 'none';
+    },
+
+    switchHelpTab(tabName) {
+        const buttons = document.querySelectorAll('.help-tab-btn');
+        buttons.forEach(btn => {
+            if (btn.getAttribute('data-help-tab') === tabName) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        const sections = document.querySelectorAll('.help-section');
+        sections.forEach(sec => {
+            if (sec.id === `help-sec-${tabName}`) {
+                sec.classList.add('active');
+            } else {
+                sec.classList.remove('active');
+            }
+        });
+    },
+
+    // ─── Backup Source Paths Management (Feature) ────────────────────────
+    async openPathsModal() {
+        document.getElementById('paths-modal').style.display = 'flex';
+        await this.loadBackupPaths();
+    },
+
+    closePathsModal() {
+        document.getElementById('paths-modal').style.display = 'none';
+        const drawer = document.getElementById('path-browser-drawer');
+        if (drawer) drawer.style.display = 'none';
+    },
+
+    async loadBackupPaths() {
+        const container = document.getElementById('paths-list-container');
+        const countBadge = document.getElementById('paths-count-badge');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="spinner" style="margin: 0 auto 10px auto;"></div>
+                <p>Lade Pfade…</p>
+            </div>
+        `;
+
+        try {
+            const res = await api.getBackupPaths();
+            if (res.success && Array.isArray(res.paths)) {
+                if (countBadge) {
+                    countBadge.innerText = `${res.paths.length} Pfad${res.paths.length === 1 ? '' : 'e'} konfiguriert`;
+                }
+
+                if (res.paths.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <p>Keine Sicherungspfade konfiguriert. Füge unten einen Pfad hinzu.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                for (const item of res.paths) {
+                    const statusBadge = item.exists 
+                        ? `<span class="badge online" style="font-size: 0.72rem;">✅ Gemountet</span>`
+                        : `<span class="badge offline" style="font-size: 0.72rem;">⚠️ Nicht gemountet</span>`;
+                    
+                    html += `
+                        <div class="path-item-card">
+                            <div class="path-item-info">
+                                <div class="path-item-text">${UI.escapeHtml(item.path)}</div>
+                                <div class="path-item-meta">
+                                    ${statusBadge}
+                                    <span>${UI.escapeHtml(item.size_info || '')}</span>
+                                </div>
+                            </div>
+                            <button class="action-btn-small danger" onclick="BorgGuard.removeBackupPath('${UI.escapeHtml(item.path)}')" title="Diesen Pfad aus den Backups entfernen" style="padding: 4px 8px; font-size: 0.78rem;">
+                                🗑️ Entfernen
+                            </button>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `<div class="empty-state"><p style="color: var(--accent-red);">Fehler beim Laden der Pfade.</p></div>`;
+            }
+        } catch (e) {
+            container.innerHTML = `<div class="empty-state"><p style="color: var(--accent-red);">Fehler: ${UI.escapeHtml(e.message)}</p></div>`;
+        }
+    },
+
+    setNewPathInput(path) {
+        const input = document.getElementById('new-path-input');
+        if (input) {
+            input.value = path;
+            input.focus();
+        }
+    },
+
+    async addNewPath() {
+        const input = document.getElementById('new-path-input');
+        if (!input) return;
+        const val = input.value.trim();
+        if (!val) {
+            UI.showToast('Bitte gib einen gültigen Pfad an.', 'error');
+            return;
+        }
+
+        try {
+            const res = await api.addBackupPath(val);
+            if (res.success) {
+                UI.showToast(`Pfad '${val}' erfolgreich hinzugefügt ✅`, 'success');
+                input.value = '';
+                await this.loadBackupPaths();
+            } else {
+                UI.showToast(`Fehler: ${res.error || 'Konnte Pfad nicht hinzufügen'}`, 'error');
+            }
+        } catch (e) {
+            UI.showToast(`Fehler beim Hinzufügen: ${e.message}`, 'error');
+        }
+    },
+
+    async removeBackupPath(path) {
+        if (!confirm(`Möchtest du den Pfad '${path}' wirklich aus den Backups entfernen?`)) {
+            return;
+        }
+
+        try {
+            const res = await api.removeBackupPath(path);
+            if (res.success) {
+                UI.showToast(`Pfad '${path}' entfernt ✅`, 'success');
+                await this.loadBackupPaths();
+            } else {
+                UI.showToast(`Fehler: ${res.error || 'Konnte Pfad nicht entfernen'}`, 'error');
+            }
+        } catch (e) {
+            UI.showToast(`Fehler beim Entfernen: ${e.message}`, 'error');
+        }
+    },
+
+    // ── Server Path Browser ──
+    _currentBrowserDir: '/',
+
+    async togglePathBrowser() {
+        const drawer = document.getElementById('path-browser-drawer');
+        if (!drawer) return;
+        if (drawer.style.display === 'none' || !drawer.style.display) {
+            drawer.style.display = 'block';
+            await this.loadServerBrowser(this._currentBrowserDir || '/');
+        } else {
+            drawer.style.display = 'none';
+        }
+    },
+
+    async loadServerBrowser(dir = '/') {
+        this._currentBrowserDir = dir;
+        const pathEl = document.getElementById('browser-current-path');
+        const container = document.getElementById('browser-entries-container');
+        const upBtn = document.getElementById('btn-browser-up');
+
+        if (pathEl) pathEl.innerText = dir;
+        if (upBtn) upBtn.disabled = (dir === '/');
+
+        if (!container) return;
+        container.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); padding: 8px;">Lade Ordner…</div>';
+
+        try {
+            const res = await api.browsePaths(dir);
+            if (res.success && Array.isArray(res.entries)) {
+                this._browserParentDir = res.parent_dir;
+                if (res.entries.length === 0) {
+                    container.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); padding: 8px;">Keine Unterordner oder Dateien vorhanden.</div>';
+                    return;
+                }
+
+                let html = '';
+                for (const entry of res.entries) {
+                    const icon = entry.is_dir ? '📁' : '📄';
+                    const onclickAction = entry.is_dir 
+                        ? `onclick="BorgGuard.loadServerBrowser('${UI.escapeHtml(entry.path)}')"`
+                        : `onclick="BorgGuard.setNewPathInput('${UI.escapeHtml(entry.path)}')"`
+                    
+                    html += `
+                        <div class="browser-entry-row" ${onclickAction}>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span>${icon}</span>
+                                <span>${UI.escapeHtml(entry.name)}</span>
+                            </div>
+                            <button class="action-btn-small" onclick="event.stopPropagation(); BorgGuard.setNewPathInput('${UI.escapeHtml(entry.path)}')" style="font-size: 0.7rem; padding: 2px 6px;">
+                                Übernehmen
+                            </button>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `<div style="font-size: 0.78rem; color: var(--accent-red); padding: 8px;">Fehler: ${UI.escapeHtml(res.error || 'Konnte Ordner nicht lesen')}</div>`;
+            }
+        } catch (e) {
+            container.innerHTML = `<div style="font-size: 0.78rem; color: var(--accent-red); padding: 8px;">Fehler: ${UI.escapeHtml(e.message)}</div>`;
+        }
+    },
+
+    browseParentDir() {
+        if (this._browserParentDir) {
+            this.loadServerBrowser(this._browserParentDir);
+        } else if (this._currentBrowserDir !== '/') {
+            const parts = this._currentBrowserDir.split('/').filter(Boolean);
+            parts.pop();
+            const parent = '/' + parts.join('/');
+            this.loadServerBrowser(parent || '/');
+        }
+    },
+
+    selectCurrentBrowserPath() {
+        if (this._currentBrowserDir) {
+            this.setNewPathInput(this._currentBrowserDir);
+        }
+    },
 };
 
 

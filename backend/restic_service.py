@@ -34,6 +34,134 @@ def load_config() -> dict:
         return {}
 
 
+def save_config(cfg: dict) -> bool:
+    """Save the restic.yaml configuration."""
+    try:
+        cfg_path = Path(config.RESTIC_CONFIG)
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        return True
+    except Exception as e:
+        logger.error(f"Fehler beim Speichern von restic.yaml: {e}")
+        return False
+
+
+def get_backup_paths() -> dict:
+    """Get all configured source directories with filesystem status."""
+    cfg = load_config()
+    source_dirs = cfg.get("source_directories", [])
+    paths_info = []
+
+    for path_str in source_dirs:
+        p = Path(path_str)
+        exists = p.exists()
+        is_dir = p.is_dir() if exists else True
+        size_human = ""
+        item_count = 0
+
+        if exists:
+            try:
+                if is_dir:
+                    items = list(p.iterdir())
+                    item_count = len(items)
+                    size_human = f"{item_count} Elemente"
+                else:
+                    sz = p.stat().st_size
+                    if sz > 1024 * 1024 * 1024:
+                        size_human = f"{round(sz / (1024**3), 2)} GB"
+                    elif sz > 1024 * 1024:
+                        size_human = f"{round(sz / (1024**2), 1)} MB"
+                    else:
+                        size_human = f"{round(sz / 1024, 1)} KB"
+            except Exception:
+                size_human = "Vorhanden"
+        else:
+            size_human = "Nicht gemountet / nicht gefunden"
+
+        paths_info.append({
+            "path": path_str,
+            "exists": exists,
+            "is_dir": is_dir,
+            "size_info": size_human,
+            "item_count": item_count,
+        })
+
+    return {"success": True, "paths": paths_info, "count": len(paths_info)}
+
+
+def add_backup_path(path_str: str) -> dict:
+    """Add a new directory or file path to source_directories."""
+    path_cleaned = path_str.strip()
+    if not path_cleaned:
+        return {"success": False, "error": "Pfadangabe darf nicht leer sein."}
+    if not path_cleaned.startswith("/"):
+        return {"success": False, "error": "Pfad muss absolut sein (mit / beginnen)."}
+
+    cfg = load_config()
+    source_dirs = cfg.get("source_directories", [])
+    if path_cleaned in source_dirs:
+        return {"success": False, "error": f"Pfad '{path_cleaned}' ist bereits konfiguriert."}
+
+    source_dirs.append(path_cleaned)
+    cfg["source_directories"] = source_dirs
+    if save_config(cfg):
+        return {"success": True, "message": f"Pfad '{path_cleaned}' hinzugefügt.", "paths": get_backup_paths()["paths"]}
+    else:
+        return {"success": False, "error": "Konnte Konfigurationsdatei restic.yaml nicht speichern."}
+
+
+def remove_backup_path(path_str: str) -> dict:
+    """Remove a path from source_directories."""
+    path_cleaned = path_str.strip()
+    cfg = load_config()
+    source_dirs = cfg.get("source_directories", [])
+
+    if path_cleaned not in source_dirs:
+        return {"success": False, "error": f"Pfad '{path_cleaned}' nicht in der Konfiguration gefunden."}
+
+    source_dirs = [p for p in source_dirs if p != path_cleaned]
+    cfg["source_directories"] = source_dirs
+    if save_config(cfg):
+        return {"success": True, "message": f"Pfad '{path_cleaned}' entfernt.", "paths": get_backup_paths()["paths"]}
+    else:
+        return {"success": False, "error": "Konnte Konfigurationsdatei restic.yaml nicht speichern."}
+
+
+def browse_server_paths(current_dir: str = "/") -> dict:
+    """List accessible server directories for interactive path picker."""
+    current_dir = current_dir.strip() or "/"
+    p = Path(current_dir)
+    if not p.exists() or not p.is_dir():
+        p = Path("/")
+
+    entries = []
+    parent_dir = str(p.parent) if str(p) != "/" else None
+
+    try:
+        for item in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            try:
+                if str(p) == "/" and item.name in ("proc", "sys", "dev"):
+                    continue
+                entries.append({
+                    "name": item.name,
+                    "path": str(item),
+                    "is_dir": item.is_dir(),
+                    "size": item.stat().st_size if not item.is_dir() else 0,
+                })
+            except Exception:
+                continue
+    except Exception as e:
+        return {"success": False, "error": str(e), "current_dir": str(p), "entries": []}
+
+    return {
+        "success": True,
+        "current_dir": str(p),
+        "parent_dir": parent_dir,
+        "entries": entries,
+    }
+
+
 async def run_hook(commands: List[str], job_manager=None, job=None):
     """Run a list of shell commands as a hook."""
     for cmd in commands:

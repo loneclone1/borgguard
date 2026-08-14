@@ -172,5 +172,28 @@ const api = {
             method: 'POST',
         });
     },
+
+    // ─── Backup Source Paths (Feature) ──────────────────────────────────
+    async getBackupPaths() {
+        return this.fetchJSON('/api/config/paths');
+    },
+
+    async addBackupPath(path) {
+        return this.fetchJSON('/api/config/paths', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path }),
+        });
+    },
+
+    async removeBackupPath(path) {
+        return this.fetchJSON(`/api/config/paths?path=${encodeURIComponent(path)}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async browsePaths(dir = '/') {
+        return this.fetchJSON(`/api/system/browse?dir=${encodeURIComponent(dir)}`);
+    },
 };
 

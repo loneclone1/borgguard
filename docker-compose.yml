@@ -8,7 +8,7 @@ services:
       - "8443:8443"
     volumes:
       # ─── Konfiguration ───
-      - ./restic.yaml:/etc/restic.yaml:ro
+      - ./restic.yaml:/etc/restic.yaml:rw
 
       # ─── SSH-Keys (optional für Remote-Backups) ───
       - /root/.ssh:/root/.ssh:ro

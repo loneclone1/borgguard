@@ -24,8 +24,10 @@ from pydantic import BaseModel
 from . import config
 from .auth import verify_credentials
 from .restic_service import (
+    add_backup_path,
     add_repository_to_config,
     unlock_repo as break_lock,
+    browse_server_paths,
     check_repo as check_integrity,
     clean_all_dr_sandboxes,
     compute_latest_backup_diff,
@@ -33,11 +35,13 @@ from .restic_service import (
     diff_snapshots,
     dump_snapshot_file_stream,
     find_files,
+    get_backup_paths,
     get_latest_backup_diff,
     get_latest_dr_report,
     list_snapshot_files,
     list_snapshots,
     modify_snapshot_tags,
+    remove_backup_path,
     restore_snapshot,
     run_dr_test,
     get_config,
@@ -500,6 +504,49 @@ async def api_cancel_job(username: str = Depends(verify_credentials)):
     cancelled = await job_manager.cancel_current_job()
     clean_all_dr_sandboxes()
     return {"success": cancelled, "message": "Vorgang wurde abgebrochen und temporäre Daten bereinigt."}
+
+
+# ─── Backup Source Paths Management (Feature) ────────────────────────────────
+
+class PathRequest(BaseModel):
+    path: str
+
+
+@app.get("/api/config/paths")
+async def api_get_backup_paths(username: str = Depends(verify_credentials)):
+    """Get list of configured backup source paths with filesystem status."""
+    return get_backup_paths()
+
+
+@app.post("/api/config/paths")
+async def api_add_backup_path(body: PathRequest, username: str = Depends(verify_credentials)):
+    """Add a new source directory to restic.yaml."""
+    res = add_backup_path(body.path)
+    if not res["success"]:
+        return JSONResponse(status_code=400, content=res)
+    return res
+
+
+@app.delete("/api/config/paths")
+async def api_remove_backup_path(
+    path: Optional[str] = Query(None),
+    body: Optional[PathRequest] = None,
+    username: str = Depends(verify_credentials),
+):
+    """Remove a source directory from restic.yaml."""
+    target_path = (body.path if body else None) or path
+    if not target_path:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Kein Pfad angegeben"})
+    res = remove_backup_path(target_path)
+    if not res["success"]:
+        return JSONResponse(status_code=400, content=res)
+    return res
+
+
+@app.get("/api/system/browse")
+async def api_browse_paths(dir: str = Query("/"), username: str = Depends(verify_credentials)):
+    """Browse server filesystem directories for interactive path picker."""
+    return browse_server_paths(dir)
 
 
 # ─── Repository Info ─────────────────────────────────────────────────────────

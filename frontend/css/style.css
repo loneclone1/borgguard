@@ -1874,3 +1874,174 @@ body::before {
     border: 1px solid var(--accent-red);
     color: var(--accent-red);
 }
+
+/* ── Help Modal & Documentation ────────────────────────────────────────── */
+.help-sidebar {
+    width: 250px;
+    min-width: 200px;
+    background: var(--terminal-surface);
+    border-right: 1px solid var(--terminal-border);
+    padding: 16px 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.help-tab-btn {
+    text-align: left;
+    padding: 10px 14px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.help-tab-btn:hover {
+    background: hsla(185, 80%, 50%, 0.08);
+    color: var(--text-primary);
+}
+
+.help-tab-btn.active {
+    background: hsla(185, 80%, 50%, 0.15);
+    color: var(--accent-cyan);
+    border-color: hsla(185, 80%, 50%, 0.35);
+    font-weight: 600;
+}
+
+.help-content-area {
+    flex: 1;
+    padding: 24px 28px;
+    overflow-y: auto;
+}
+
+.help-section {
+    display: none;
+    animation: fadeIn 0.15s ease;
+}
+
+.help-section.active {
+    display: block;
+}
+
+.help-section h3 {
+    font-size: 1.25rem;
+    color: var(--accent-cyan);
+    margin-bottom: 12px;
+}
+
+.help-section p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+.help-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    margin-top: 14px;
+}
+
+.help-card {
+    background: var(--terminal-surface);
+    border: 1px solid var(--terminal-border);
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+}
+
+.help-card h4 {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.help-card p, .help-card li {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.help-card ul, .help-card ol {
+    padding-left: 18px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.help-card li {
+    margin-bottom: 4px;
+}
+
+.help-tip-box {
+    background: hsla(185, 80%, 50%, 0.08);
+    border-left: 3px solid var(--accent-cyan);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+}
+
+/* ── Paths Management ─────────────────────────────────────────────────── */
+.path-item-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--terminal-surface);
+    border: 1px solid var(--terminal-border);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    transition: border-color var(--transition-fast);
+}
+
+.path-item-card:hover {
+    border-color: hsla(185, 80%, 50%, 0.4);
+}
+
+.path-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.path-item-text {
+    font-family: var(--font-mono);
+    font-size: 0.86rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.path-item-meta {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.browser-entry-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.browser-entry-row:hover {
+    background: hsla(185, 80%, 50%, 0.12);
+    color: var(--accent-cyan);
+}
+
