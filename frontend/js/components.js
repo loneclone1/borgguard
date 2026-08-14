@@ -360,6 +360,8 @@ const UI = {
             'check': '🔍 Integritätsprüfung',
             'prune': '🧹 Bereinigung',
             'compact': '📦 Komprimierung',
+            'restore': '🔄 Wiederherstellung',
+            'dr_test': '🛡️ DR-Restore Test',
         };
 
         if (jobTypeEl) {

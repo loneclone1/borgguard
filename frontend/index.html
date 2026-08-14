@@ -65,7 +65,7 @@
 
         <!-- ─── Top Section (Status Cards + Actions) ────────────────── -->
         <div class="dashboard-top-section">
-            <section class="status-grid" id="status-grid">
+            <section class="status-grid" id="status-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
                 <!-- Last Backup -->
                 <div class="status-card" id="card-lastbackup">
                     <div class="card-header">
@@ -101,6 +101,18 @@
                     </div>
                     <div class="card-detail" id="storage-detail">In Google Drive öffnen ↗</div>
                 </div>
+
+                <!-- DR-Test Status (Feature 6) -->
+                <div class="status-card clickable" id="card-dr" onclick="BorgGuard.openDrModal()" title="Disaster Recovery Dry-Run Details öffnen">
+                    <div class="card-header">
+                        <div class="card-icon orange">🛡️</div>
+                        <span class="card-label">DR-Restore Test</span>
+                    </div>
+                    <div class="card-value" id="dr-status-value" style="font-size: 1.15rem;">
+                        <span class="dr-badge none">Kein Test</span>
+                    </div>
+                    <div class="card-detail" id="dr-status-detail">Sandbox-Test ausführen ↗</div>
+                </div>
             </section>
 
             <section class="actions-panel compact" id="actions-panel">
@@ -113,6 +125,10 @@
                     <button class="action-btn secondary" id="btn-check" onclick="BorgGuard.triggerCheck()">
                         <span class="btn-icon">🔍</span>
                         Integrität prüfen
+                    </button>
+                    <button class="action-btn" id="btn-dr-test" onclick="BorgGuard.openDrModal()" style="border-color: var(--accent-orange); color: var(--accent-orange);">
+                        <span class="btn-icon">🛡️</span>
+                        DR-Restore Test (Dry-Run)
                     </button>
                     <button class="action-btn warning" id="btn-prune" onclick="BorgGuard.triggerPrune()">
                         <span class="btn-icon">🧹</span>
@@ -515,6 +531,51 @@
             <!-- Search Footer -->
             <div class="explorer-footer" id="find-footer" style="display: none;">
                 <span id="find-results-count">0 Treffer</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Disaster Recovery Dry-Run Modal (Feature 6) -->
+    <div class="modal-overlay" id="dr-test-modal" style="display: none; z-index: 1060;">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2><span class="btn-icon">🛡️</span> Disaster Recovery Test (Dry-Run)</h2>
+                <button class="close-btn" onclick="BorgGuard.closeDrModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.5;">
+                    Ein <strong>DR-Dry-Run</strong> stellt einen Snapshot vollständig in eine isolierte temporäre Sandbox auf dem Server wieder her, prüft alle Prüfsummen und bereinigt die Sandbox im Anschluss automatisch. Deine Produktivdaten werden zu keinem Zeitpunkt berührt.
+                </p>
+
+                <!-- Latest Report Card -->
+                <div class="schedule-section" style="margin-bottom: 16px;">
+                    <label class="section-label">Letztes Testergebnis</label>
+                    <div id="dr-report-card" class="dr-report-card">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <span id="dr-report-badge" class="dr-badge none">Noch kein Test</span>
+                            <span id="dr-report-date" style="font-size: 0.78rem; color: var(--text-muted);">—</span>
+                        </div>
+                        <div id="dr-report-message" style="font-size: 0.84rem; color: var(--text-primary); margin-bottom: 6px;">
+                            Noch kein automatisierter DR-Wiederherstellungstest durchgeführt.
+                        </div>
+                        <div id="dr-report-details" style="font-size: 0.76rem; color: var(--text-secondary); font-family: var(--font-mono);"></div>
+                    </div>
+                </div>
+
+                <!-- Test Selection -->
+                <div class="schedule-section">
+                    <label class="section-label">Zu testender Snapshot</label>
+                    <select id="dr-select-snapshot" class="cron-input" style="margin-bottom: 12px;">
+                        <option value="">Neuester Snapshot (Automatisch)</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                    <button class="action-btn" onclick="BorgGuard.closeDrModal()">Schließen</button>
+                    <button class="action-btn primary" onclick="BorgGuard.runDrTestFromModal()" style="background: var(--accent-green); color: var(--terminal-bg); border: none; font-weight: 600;">
+                        🧪 Test jetzt starten
+                    </button>
+                </div>
             </div>
         </div>
     </div>

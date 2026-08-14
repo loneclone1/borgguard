@@ -128,6 +128,9 @@ const BorgGuard = {
                 if(updateEl) updateEl.innerText = `Letztes Update: ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
             }
 
+            // Refresh DR status badge
+            this.loadDrStatus();
+
             const logs = await api.getLogs('system');
             if (logs.content) {
                 UI.renderLogs(logs.content, 'log-system');
@@ -1370,6 +1373,121 @@ const BorgGuard = {
             setTimeout(() => this.refresh(), 1000);
         } catch (e) {
             UI.showToast('Fehler beim Starten der Wiederherstellung: ' + e.message, 'error');
+        }
+    },
+
+    // ─── Disaster Recovery Dry-Run (Feature 6) ──────────────────────────
+    async loadDrStatus() {
+        const valueEl = document.getElementById('dr-status-value');
+        const detailEl = document.getElementById('dr-status-detail');
+        if (!valueEl) return;
+
+        try {
+            const res = await api.getDrReport();
+            if (res.success && res.report) {
+                const r = res.report;
+                if (r.status === 'PASSED') {
+                    valueEl.innerHTML = `<span class="dr-badge passed">✅ PASSED</span>`;
+                    const dateStr = r.last_tested ? new Date(r.last_tested).toLocaleDateString('de-DE') : '';
+                    const mbStr = r.bytes_verified ? `${(r.bytes_verified / (1024*1024)).toFixed(1)} MB` : '';
+                    detailEl.innerText = `${dateStr} · ${r.files_verified || 0} Dateien (${mbStr})`;
+                } else if (r.status === 'FAILED') {
+                    valueEl.innerHTML = `<span class="dr-badge failed">❌ FEHLER</span>`;
+                    detailEl.innerText = r.message || 'DR-Test fehlgeschlagen';
+                } else {
+                    valueEl.innerHTML = `<span class="dr-badge none">Kein Test</span>`;
+                    detailEl.innerText = 'Sandbox-Test ausführen ↗';
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+    },
+
+    async openDrModal() {
+        const select = document.getElementById('dr-select-snapshot');
+        const badgeEl = document.getElementById('dr-report-badge');
+        const dateEl = document.getElementById('dr-report-date');
+        const msgEl = document.getElementById('dr-report-message');
+        const detailsEl = document.getElementById('dr-report-details');
+
+        // Populate select with snapshots
+        let snapshots = this._snapshotsCache;
+        if (!snapshots || snapshots.length === 0) {
+            try {
+                const archives = await api.getArchives();
+                if (archives.success && archives.archives) {
+                    snapshots = archives.archives;
+                    this._snapshotsCache = snapshots;
+                }
+            } catch (e) {}
+        }
+
+        if (select && snapshots && snapshots.length > 0) {
+            const sorted = [...snapshots].sort((a, b) => new Date(b.start) - new Date(a.start));
+            let html = '<option value="">Neuester Snapshot (Automatisch)</option>';
+            for (const s of sorted) {
+                const dateStr = s.start ? new Date(s.start).toLocaleString('de-DE') : '';
+                html += `<option value="${UI.escapeHtml(s.name)}">${UI.escapeHtml(s.name)} (${dateStr})</option>`;
+            }
+            select.innerHTML = html;
+        }
+
+        // Load latest report details
+        try {
+            const res = await api.getDrReport();
+            if (res.success && res.report) {
+                const r = res.report;
+                if (r.status === 'PASSED') {
+                    badgeEl.className = 'dr-badge passed';
+                    badgeEl.innerText = '✅ PASSED';
+                    dateEl.innerText = r.last_tested ? new Date(r.last_tested).toLocaleString('de-DE') : '';
+                    msgEl.innerText = r.message || 'Erfolgreich';
+                    const mb = r.bytes_verified ? (r.bytes_verified / (1024*1024)).toFixed(2) : 0;
+                    detailsEl.innerText = `Snapshot: ${r.short_id || r.snapshot_id} · ${r.files_verified} Dateien · ${mb} MB · Dauer: ${r.duration_seconds}s`;
+                } else if (r.status === 'FAILED') {
+                    badgeEl.className = 'dr-badge failed';
+                    badgeEl.innerText = '❌ FAILED';
+                    dateEl.innerText = r.last_tested ? new Date(r.last_tested).toLocaleString('de-DE') : '';
+                    msgEl.innerText = r.message || 'Fehlgeschlagen';
+                    detailsEl.innerText = `Snapshot: ${r.short_id || r.snapshot_id} · Dauer: ${r.duration_seconds}s`;
+                } else {
+                    badgeEl.className = 'dr-badge none';
+                    badgeEl.innerText = 'Noch kein Test';
+                    dateEl.innerText = '—';
+                    msgEl.innerText = 'Noch kein automatisierter DR-Wiederherstellungstest durchgeführt.';
+                    detailsEl.innerText = '';
+                }
+            }
+        } catch (e) {}
+
+        document.getElementById('dr-test-modal').style.display = 'flex';
+    },
+
+    closeDrModal() {
+        document.getElementById('dr-test-modal').style.display = 'none';
+    },
+
+    async runDrTestFromModal() {
+        const select = document.getElementById('dr-select-snapshot');
+        const snapId = select ? select.value : null;
+
+        this.closeDrModal();
+        try {
+            UI.showToast('Starte Disaster Recovery Dry-Run Test…', 'info');
+            const res = await api.startDrTest(snapId || null);
+            if (res.job) {
+                UI.renderProgress({
+                    active: true,
+                    job_type: 'dr_test',
+                    phase: 'DR-Sandbox-Test wird gestartet…',
+                    percent: 5,
+                    output_lines: []
+                });
+                this._startProgressPoll();
+            }
+        } catch (e) {
+            UI.showToast('Fehler beim Starten des DR-Tests: ' + e.message, 'error');
         }
     },
 };

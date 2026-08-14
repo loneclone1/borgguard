@@ -1792,3 +1792,40 @@ body::before {
     background: var(--accent-red);
     color: var(--text-primary);
 }
+
+/* ── Disaster Recovery Dry-Run (Feature 6) ────────────────────────────── */
+.dr-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+}
+
+.dr-badge.passed {
+    background: hsla(155, 70%, 50%, 0.15);
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
+}
+
+.dr-badge.failed {
+    background: hsla(0, 80%, 60%, 0.15);
+    border: 1px solid var(--accent-red);
+    color: var(--accent-red);
+}
+
+.dr-badge.none {
+    background: var(--terminal-surface);
+    border: 1px solid var(--terminal-border);
+    color: var(--text-muted);
+}
+
+.dr-report-card {
+    padding: var(--space-md);
+    background: var(--terminal-surface);
+    border: 1px solid var(--terminal-border);
+    border-radius: var(--radius-md);
+}

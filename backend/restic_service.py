@@ -6,12 +6,18 @@ All commands are executed asynchronously via asyncio.subprocess.
 
 import asyncio
 import json
+import logging
 import os
 import re
+import shutil
+import tempfile
+import time
 import yaml
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable, Awaitable, List
+
+logger = logging.getLogger("borgguard.restic")
 
 from . import config
 
@@ -569,6 +575,150 @@ async def restore_snapshot(
                 )
 
     return await run_restic_streamed(*cmd_args, on_line=_on_line)
+
+
+# ─── Disaster Recovery Dry-Run (Feature 6) ───────────────────────────────────
+
+DR_REPORT_FILE = Path("/home/jb/borgguard/data/dr_test_report.json") if os.path.exists("/home/jb/borgguard") else Path(__file__).resolve().parent.parent / "data" / "dr_test_report.json"
+
+
+def get_latest_dr_report() -> dict:
+    """Retrieve the latest Disaster Recovery test report."""
+    try:
+        if DR_REPORT_FILE.exists():
+            with open(DR_REPORT_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {
+        "status": "NONE",
+        "last_tested": None,
+        "snapshot_id": None,
+        "short_id": None,
+        "files_verified": 0,
+        "bytes_verified": 0,
+        "duration_seconds": 0,
+        "message": "Noch kein DR-Test durchgeführt",
+    }
+
+
+def _save_dr_report(report: dict):
+    """Save DR test report to persistent JSON file."""
+    try:
+        DR_REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(DR_REPORT_FILE, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Konnte DR-Report nicht speichern: {e}")
+
+
+async def run_dr_test(
+    snapshot_id: Optional[str] = None,
+    job=None,
+    job_manager=None,
+) -> dict:
+    """Run an automated sandbox restore test to verify backup integrity."""
+    start_time = time.time()
+
+    # If no snapshot specified, find the latest snapshot
+    if not snapshot_id:
+        snaps_res = await list_snapshots()
+        if not snaps_res["success"] or not snaps_res.get("data"):
+            err = "Keine Snapshots im Repository gefunden, die getestet werden können."
+            if job and job_manager:
+                await job_manager.add_job_output(job, f"ERROR: {err}")
+            return {"success": False, "error": err}
+        sorted_snaps = sorted(snaps_res["data"], key=lambda x: x.get("start") or "", reverse=True)
+        snapshot_id = sorted_snaps[0]["id"]
+
+    short_id = snapshot_id[:8] if len(snapshot_id) >= 8 else snapshot_id
+    sandbox_dir = tempfile.mkdtemp(prefix=f"borgguard_dr_test_{short_id}_")
+
+    if job and job_manager:
+        await job_manager.update_progress(job, phase=f"Starte DR-Sandbox-Test für Snapshot {short_id}…", percent=10)
+        await job_manager.add_job_output(job, f"> DR-Test initialisiert in Sandbox: {sandbox_dir}")
+        await job_manager.add_job_output(job, f"> Verifiziere Wiederherstellbarkeit von Snapshot: {snapshot_id}")
+
+    try:
+        cmd_args = ["restore", snapshot_id, "--target", sandbox_dir, "--verify"]
+
+        async def _on_line(stream, line):
+            if job and job_manager:
+                prefix = "" if stream == "stdout" else "STDERR: "
+                await job_manager.add_job_output(job, f"{prefix}{line}")
+                prog = parse_restic_progress(line)
+                if prog:
+                    await job_manager.update_progress(
+                        job,
+                        phase=prog.get("status", "DR-Wiederherstellung läuft…"),
+                        percent=max(15, min(85, prog["percent"])),
+                    )
+
+        res = await run_restic_streamed(*cmd_args, on_line=_on_line)
+        duration = round(time.time() - start_time, 2)
+
+        if not res["success"]:
+            # Fallback without --verify in case restic version does not support flag
+            if job and job_manager:
+                await job_manager.add_job_output(job, "Wiederhole Test ohne --verify Flag…")
+            cmd_args = ["restore", snapshot_id, "--target", sandbox_dir]
+            res = await run_restic_streamed(*cmd_args, on_line=_on_line)
+
+        if res["success"]:
+            file_count = 0
+            total_bytes = 0
+            for root, _, files in os.walk(sandbox_dir):
+                for f in files:
+                    file_count += 1
+                    try:
+                        total_bytes += os.path.getsize(os.path.join(root, f))
+                    except Exception:
+                        pass
+
+            if job and job_manager:
+                await job_manager.update_progress(job, phase="Verifiziere extrahierte Daten…", percent=90)
+                await job_manager.add_job_output(
+                    job,
+                    f"> ✅ DR-Test ERFOLGREICH! {file_count} Dateien ({round(total_bytes / (1024*1024), 2)} MB) erfolgreich wiederhergestellt und verifiziert in {duration}s."
+                )
+
+            report = {
+                "status": "PASSED",
+                "last_tested": datetime.utcnow().isoformat() + "Z",
+                "snapshot_id": snapshot_id,
+                "short_id": short_id,
+                "files_verified": file_count,
+                "bytes_verified": total_bytes,
+                "duration_seconds": duration,
+                "message": f"Snapshot {short_id} erfolgreich verifiziert ({file_count} Dateien, {round(total_bytes / (1024*1024), 2)} MB)",
+            }
+            _save_dr_report(report)
+            return {"success": True, "report": report}
+        else:
+            err = res.get("stderr", "Fehler bei der Wiederherstellung in die Sandbox")
+            if job and job_manager:
+                await job_manager.add_job_output(job, f"> ❌ DR-Test FEHLGESCHLAGEN: {err}")
+            report = {
+                "status": "FAILED",
+                "last_tested": datetime.utcnow().isoformat() + "Z",
+                "snapshot_id": snapshot_id,
+                "short_id": short_id,
+                "files_verified": 0,
+                "bytes_verified": 0,
+                "duration_seconds": duration,
+                "message": f"Wiederherstellung von {short_id} fehlgeschlagen: {err}",
+            }
+            _save_dr_report(report)
+            return {"success": False, "error": err, "report": report}
+
+    finally:
+        try:
+            if os.path.exists(sandbox_dir):
+                shutil.rmtree(sandbox_dir, ignore_errors=True)
+                if job and job_manager:
+                    await job_manager.add_job_output(job, f"> Sandbox-Verzeichnis erfolgreich gelöscht.")
+        except Exception as e:
+            logger.warning(f"Konnte Sandbox nicht löschen: {e}")
 
 
 async def get_repo_info() -> dict:

@@ -152,5 +152,18 @@ const api = {
     async findFiles(query) {
         return this.fetchJSON(`/api/snapshots/find?q=${encodeURIComponent(query)}`);
     },
+
+    // ─── Disaster Recovery Dry-Run (Feature 6) ──────────────────────────
+    async getDrReport() {
+        return this.fetchJSON('/api/dr-test/report');
+    },
+
+    async startDrTest(snapshotId = null) {
+        return this.fetchJSON('/api/dr-test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ snapshot_id: snapshotId }),
+        });
+    },
 };
 

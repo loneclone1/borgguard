@@ -30,10 +30,12 @@ from .restic_service import (
     diff_snapshots,
     dump_snapshot_file_stream,
     find_files,
+    get_latest_dr_report,
     list_snapshot_files,
     list_snapshots,
     modify_snapshot_tags,
     restore_snapshot,
+    run_dr_test,
     get_config,
     get_configured_repositories,
     get_repo_info,
@@ -431,6 +433,45 @@ async def api_snapshots_find(
     if not res["success"]:
         return JSONResponse(status_code=500, content={"error": res.get("error", "Fehler bei der Suche")})
     return res
+
+
+# ─── Disaster Recovery Dry-Run (Feature 6) ───────────────────────────────────
+
+class DrTestRequest(BaseModel):
+    snapshot_id: Optional[str] = None
+
+
+@app.get("/api/dr-test/report")
+async def api_get_dr_report(username: str = Depends(verify_credentials)):
+    """Get the latest Disaster Recovery test report."""
+    report = get_latest_dr_report()
+    return {"success": True, "report": report}
+
+
+@app.post("/api/dr-test")
+async def api_start_dr_test(
+    body: Optional[DrTestRequest] = None,
+    username: str = Depends(verify_credentials),
+):
+    """Start an automated sandbox restore test in the background."""
+    if job_manager.is_busy():
+        return JSONResponse(
+            status_code=409,
+            content={"error": "Ein Job läuft bereits", "current_job": job_manager.current_job.to_dict()},
+        )
+
+    snapshot_id = body.snapshot_id.strip() if body and body.snapshot_id else None
+
+    async def _run():
+        job = job_manager.current_job
+        result = await run_dr_test(snapshot_id=snapshot_id, job=job, job_manager=job_manager)
+        if result.get("stdout") or result.get("stderr"):
+            lines = (result.get("stdout", "") + "\n" + result.get("stderr", "")).splitlines()
+            write_job_log("dr_test", lines)
+        return result
+
+    job = await job_manager.start_job(JobType.DR_TEST, _run)
+    return {"message": "Disaster Recovery Test gestartet", "job": job.to_dict()}
 
 
 # ─── Repository Info ─────────────────────────────────────────────────────────
