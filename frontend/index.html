@@ -305,8 +305,18 @@
     <div class="modal-overlay" id="snapshots-modal" style="display: none;">
         <div class="modal modal-large" style="max-width: 950px; width: 95%;">
             <div class="modal-header">
-                <h2><span class="btn-icon">📋</span> Snapshots</h2>
-                <button class="close-btn" onclick="BorgGuard.closeSnapshotsModal()">✕</button>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h2><span class="btn-icon">📋</span> Snapshots</h2>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button class="action-btn-small" onclick="BorgGuard.openFindModal()" title="Alle Snapshots nach Dateien durchsuchen">
+                        🔍 Dateisuche
+                    </button>
+                    <button class="action-btn-small" onclick="BorgGuard.openDiffModal()" title="Zwei Snapshots miteinander vergleichen">
+                        ⚖️ Snapshots vergleichen
+                    </button>
+                    <button class="close-btn" onclick="BorgGuard.closeSnapshotsModal()">✕</button>
+                </div>
             </div>
             <!-- Tag Filter Bar (Feature 4) -->
             <div class="tag-filter-bar" id="snapshots-tag-filter-bar">
@@ -382,6 +392,129 @@
                         <span class="tag-preset" onclick="BorgGuard.addPresetTag('config-change')">+ config-change</span>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Snapshot Diff Modal (Feature 2) -->
+    <div class="modal-overlay" id="diff-modal" style="display: none; z-index: 1060;">
+        <div class="modal modal-large" style="max-width: 950px; width: 95%; height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2><span class="btn-icon">⚖️</span> Snapshots vergleichen (Diff)</h2>
+                <button class="close-btn" onclick="BorgGuard.closeDiffModal()">✕</button>
+            </div>
+            <!-- Snapshot Selection Bar -->
+            <div class="diff-selection-bar">
+                <div class="diff-select-group">
+                    <label class="diff-label">Basis (Älterer Snapshot):</label>
+                    <select id="diff-select-snap1" class="cron-input" style="margin:0;"></select>
+                </div>
+                <div style="font-size: 1.2rem; color: var(--accent-cyan); align-self: flex-end; padding-bottom: 6px;">➔</div>
+                <div class="diff-select-group">
+                    <label class="diff-label">Vergleich (Neuerer Snapshot):</label>
+                    <select id="diff-select-snap2" class="cron-input" style="margin:0;"></select>
+                </div>
+                <button class="action-btn primary" onclick="BorgGuard.runSnapshotDiff()" style="align-self: flex-end; margin-bottom: 0;">
+                    🔍 Vergleichen
+                </button>
+            </div>
+
+            <!-- Diff Summary Cards -->
+            <div class="diff-summary-row" id="diff-summary-row" style="display: none;">
+                <div class="diff-stat-card added">
+                    <div class="diff-stat-num" id="diff-count-added">0</div>
+                    <div class="diff-stat-label">➕ Hinzugefügt</div>
+                </div>
+                <div class="diff-stat-card modified">
+                    <div class="diff-stat-num" id="diff-count-modified">0</div>
+                    <div class="diff-stat-label">✏️ Geändert</div>
+                </div>
+                <div class="diff-stat-card removed">
+                    <div class="diff-stat-num" id="diff-count-removed">0</div>
+                    <div class="diff-stat-label">🗑️ Gelöscht</div>
+                </div>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="tab-bar" id="diff-filter-tabs" style="padding: 0 15px; border-bottom: 1px solid var(--terminal-border); display: none;">
+                <button class="tab-btn active" data-diff-tab="all" onclick="BorgGuard.switchDiffTab('all')">Alle (<span id="diff-tab-count-all">0</span>)</button>
+                <button class="tab-btn" data-diff-tab="added" onclick="BorgGuard.switchDiffTab('added')">➕ Neu (<span id="diff-tab-count-added">0</span>)</button>
+                <button class="tab-btn" data-diff-tab="modified" onclick="BorgGuard.switchDiffTab('modified')">✏️ Geändert (<span id="diff-tab-count-modified">0</span>)</button>
+                <button class="tab-btn" data-diff-tab="removed" onclick="BorgGuard.switchDiffTab('removed')">🗑️ Gelöscht (<span id="diff-tab-count-removed">0</span>)</button>
+            </div>
+
+            <!-- Diff List Body -->
+            <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 0;">
+                <div id="diff-loading" class="empty-state" style="display: none; padding: 40px 20px;">
+                    <div class="spinner" style="margin: 0 auto 15px auto;"></div>
+                    <p>Vergleiche Snapshots…</p>
+                </div>
+                <div id="diff-empty-prompt" class="empty-state" style="padding: 40px 20px;">
+                    <div class="empty-icon">⚖️</div>
+                    <p>Wähle zwei Snapshots oben aus und klicke auf „Vergleichen“.</p>
+                </div>
+                <div id="diff-results-container" style="display: none;">
+                    <table class="archive-table explorer-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">Typ</th>
+                                <th>Dateipfad</th>
+                                <th style="width: 110px; text-align: right;">Aktion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diff-results-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global File Search Modal (Feature 2) -->
+    <div class="modal-overlay" id="find-modal" style="display: none; z-index: 1060;">
+        <div class="modal modal-large" style="max-width: 950px; width: 95%; height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2><span class="btn-icon">🔍</span> Globale Dateisuche über alle Snapshots</h2>
+                <button class="close-btn" onclick="BorgGuard.closeFindModal()">✕</button>
+            </div>
+            <!-- Search Bar -->
+            <div class="explorer-toolbar" style="padding: 12px 15px;">
+                <div style="display: flex; gap: 8px; width: 100%;">
+                    <input type="text" id="global-find-input" class="cron-input" placeholder="🔍 Dateiname oder Suchmuster (z.B. rechnung_2025.pdf oder *.jpg)..." style="margin:0; flex:1;" onkeydown="if(event.key==='Enter') BorgGuard.runGlobalFind()" spellcheck="false">
+                    <button class="action-btn primary" onclick="BorgGuard.runGlobalFind()" style="padding: 0 18px;">
+                        Suchen
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Results Body -->
+            <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 0;">
+                <div id="find-loading" class="empty-state" style="display: none; padding: 40px 20px;">
+                    <div class="spinner" style="margin: 0 auto 15px auto;"></div>
+                    <p>Durchsuche alle Snapshots im Repository…</p>
+                </div>
+                <div id="find-empty-prompt" class="empty-state" style="padding: 40px 20px;">
+                    <div class="empty-icon">🔍</div>
+                    <p>Gib einen Suchbegriff ein, um alle Backups nach passenden Dateien zu durchsuchen.</p>
+                </div>
+                <div id="find-results-container" style="display: none;">
+                    <table class="archive-table explorer-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="width: 35px;"></th>
+                                <th>Dateiname / Pfad</th>
+                                <th style="width: 110px;">Snapshot</th>
+                                <th style="width: 90px;">Größe</th>
+                                <th style="width: 140px;">Datum</th>
+                                <th style="width: 120px; text-align: right;">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="find-results-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Search Footer -->
+            <div class="explorer-footer" id="find-footer" style="display: none;">
+                <span id="find-results-count">0 Treffer</span>
             </div>
         </div>
     </div>

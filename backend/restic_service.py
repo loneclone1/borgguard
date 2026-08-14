@@ -395,6 +395,120 @@ async def modify_snapshot_tags(snapshot_id: str, action: str, tags: List[str]) -
     return res
 
 
+async def diff_snapshots(snap_id_1: str, snap_id_2: str) -> dict:
+    """Compare differences between two snapshots."""
+    res = await run_restic("diff", snap_id_1, snap_id_2)
+    if not res["success"]:
+        return {"success": False, "error": res.get("stderr", "Fehler beim Vergleichen der Snapshots")}
+
+    stdout = res.get("stdout", "")
+    added = []
+    removed = []
+    modified = []
+    summary_raw = []
+
+    for line in stdout.splitlines():
+        trimmed = line.strip()
+        if not trimmed:
+            continue
+
+        if line.startswith("+") and len(line) > 1:
+            path = line[1:].strip()
+            if path and not path.startswith("comparing") and not path.startswith("Files:"):
+                added.append(path)
+        elif line.startswith("-") and len(line) > 1:
+            path = line[1:].strip()
+            if path and not path.startswith("comparing") and not path.startswith("Files:"):
+                removed.append(path)
+        elif line.startswith("M ") or line.startswith("M\t") or line.startswith("U ") or line.startswith("U\t"):
+            path = line[2:].strip()
+            modified.append(path)
+        elif "Files:" in line or "Raw Data:" in line or "Data Blobs:" in line or "Dirs:" in line:
+            summary_raw.append(trimmed)
+
+    return {
+        "success": True,
+        "snap1": snap_id_1,
+        "snap2": snap_id_2,
+        "added": added,
+        "removed": removed,
+        "modified": modified,
+        "summary": {
+            "files_new": len(added),
+            "files_removed": len(removed),
+            "files_changed": len(modified),
+            "raw_summary": " · ".join(summary_raw),
+        },
+    }
+
+
+async def find_files(query: str) -> dict:
+    """Find files matching a query/pattern across all snapshots."""
+    query = query.strip()
+    if not query:
+        return {"success": True, "query": query, "results": []}
+
+    res = await run_restic("find", "--json", query)
+    if not res["success"]:
+        res = await run_restic("find", query)
+        if not res["success"]:
+            return {"success": False, "error": res.get("stderr", "Fehler bei der Suche"), "results": []}
+
+    stdout = res.get("stdout", "")
+    results = []
+    current_snap = None
+
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+            if isinstance(item, dict):
+                snap_id = item.get("snapshot", "")
+                if "hits" in item:
+                    for hit in item.get("hits", []):
+                        hit_path = hit.get("path", "")
+                        results.append({
+                            "snapshot": snap_id,
+                            "path": hit_path,
+                            "name": Path(hit_path).name or hit_path,
+                            "type": "d" if hit.get("type") == "dir" else "f",
+                            "size": hit.get("size", 0),
+                            "mtime": hit.get("mtime", ""),
+                        })
+                elif item.get("path"):
+                    item_path = item.get("path", "")
+                    results.append({
+                        "snapshot": snap_id,
+                        "path": item_path,
+                        "name": item.get("name") or Path(item_path).name or item_path,
+                        "type": "d" if item.get("type") == "dir" else "f",
+                        "size": item.get("size", 0),
+                        "mtime": item.get("mtime", ""),
+                    })
+        except json.JSONDecodeError:
+            if "snapshot" in line.lower() and "found" in line.lower():
+                parts = line.split()
+                for i, p in enumerate(parts):
+                    if p.lower() == "snapshot" and i + 1 < len(parts):
+                        current_snap = parts[i + 1]
+                        break
+            elif line.startswith("/"):
+                results.append({
+                    "snapshot": current_snap or "unbekannt",
+                    "path": line,
+                    "name": Path(line).name or line,
+                    "type": "d" if line.endswith("/") else "f",
+                    "size": 0,
+                    "mtime": "",
+                })
+        except Exception:
+            continue
+
+    return {"success": True, "query": query, "results": results}
+
+
 async def dump_snapshot_file_stream(snapshot_id: str, file_path: str):
     """Generator yielding binary chunks of a file via restic dump."""
     cmd = ["restic", "dump", snapshot_id, file_path]

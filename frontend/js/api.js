@@ -143,5 +143,14 @@ const api = {
             method: 'DELETE',
         });
     },
+
+    // ─── Snapshot Diff & Find (Feature 2) ───────────────────────────────
+    async diffSnapshots(snap1, snap2) {
+        return this.fetchJSON(`/api/snapshots/diff?snap1=${encodeURIComponent(snap1)}&snap2=${encodeURIComponent(snap2)}`);
+    },
+
+    async findFiles(query) {
+        return this.fetchJSON(`/api/snapshots/find?q=${encodeURIComponent(query)}`);
+    },
 };
 

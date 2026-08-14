@@ -27,7 +27,9 @@ from .restic_service import (
     unlock_repo as break_lock,
     check_repo as check_integrity,
     create_backup,
+    diff_snapshots,
     dump_snapshot_file_stream,
+    find_files,
     list_snapshot_files,
     list_snapshots,
     modify_snapshot_tags,
@@ -400,6 +402,35 @@ async def api_remove_single_tag(
     STATUS_CACHE_TIME = 0.0
     job_manager.last_known_archives = None
     return {"success": True, "message": f"Tag '{tag}' entfernt"}
+
+
+# ─── Snapshot Diff & Search (Feature 2) ──────────────────────────────────────
+
+@app.get("/api/snapshots/diff")
+@app.get("/api/archives/diff")
+async def api_snapshots_diff(
+    snap1: str = Query(..., description="First snapshot ID (older/base)"),
+    snap2: str = Query(..., description="Second snapshot ID (newer/comparison)"),
+    username: str = Depends(verify_credentials),
+):
+    """Compare differences between two snapshots."""
+    res = await diff_snapshots(snap1.strip(), snap2.strip())
+    if not res["success"]:
+        return JSONResponse(status_code=500, content={"error": res.get("error", "Fehler beim Snapshot-Vergleich")})
+    return res
+
+
+@app.get("/api/snapshots/find")
+@app.get("/api/archives/find")
+async def api_snapshots_find(
+    q: str = Query(..., description="Filename or pattern to search for across all snapshots"),
+    username: str = Depends(verify_credentials),
+):
+    """Search for files matching query across all snapshots."""
+    res = await find_files(q)
+    if not res["success"]:
+        return JSONResponse(status_code=500, content={"error": res.get("error", "Fehler bei der Suche")})
+    return res
 
 
 # ─── Repository Info ─────────────────────────────────────────────────────────

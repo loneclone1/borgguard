@@ -1697,3 +1697,98 @@ body::before {
     border-color: var(--accent-cyan);
     background: var(--bg-card-hover);
 }
+
+/* ── Snapshot Diff & Search (Feature 2) ───────────────────────────────── */
+.diff-selection-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--terminal-surface);
+    border-bottom: 1px solid var(--terminal-border);
+    flex-wrap: wrap;
+}
+
+.diff-select-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.diff-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.diff-summary-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--terminal-border);
+}
+
+.diff-stat-card {
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    border: 1px solid var(--terminal-border);
+}
+
+.diff-stat-card.added {
+    background: hsla(155, 70%, 50%, 0.1);
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+}
+
+.diff-stat-card.modified {
+    background: hsla(30, 90%, 60%, 0.1);
+    border-color: var(--accent-orange);
+    color: var(--accent-orange);
+}
+
+.diff-stat-card.removed {
+    background: hsla(0, 80%, 60%, 0.1);
+    border-color: var(--accent-red);
+    color: var(--accent-red);
+}
+
+.diff-stat-num {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+}
+
+.diff-stat-label {
+    font-size: 0.75rem;
+    margin-top: 2px;
+    font-weight: 500;
+}
+
+.diff-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 0.72rem;
+    font-weight: bold;
+    border-radius: 3px;
+    text-align: center;
+}
+
+.diff-badge.added {
+    background: var(--accent-green);
+    color: var(--terminal-bg);
+}
+
+.diff-badge.modified {
+    background: var(--accent-orange);
+    color: var(--terminal-bg);
+}
+
+.diff-badge.removed {
+    background: var(--accent-red);
+    color: var(--text-primary);
+}

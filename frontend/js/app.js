@@ -474,6 +474,265 @@ const BorgGuard = {
         }
     },
 
+    // ─── Snapshot Diff (Feature 2) ──────────────────────────────────────
+    _diffData: null,
+    _currentDiffTab: 'all',
+
+    async openDiffModal() {
+        const snap1Select = document.getElementById('diff-select-snap1');
+        const snap2Select = document.getElementById('diff-select-snap2');
+        const summaryRow = document.getElementById('diff-summary-row');
+        const tabsBar = document.getElementById('diff-filter-tabs');
+        const resultsContainer = document.getElementById('diff-results-container');
+        const emptyPrompt = document.getElementById('diff-empty-prompt');
+
+        if (summaryRow) summaryRow.style.display = 'none';
+        if (tabsBar) tabsBar.style.display = 'none';
+        if (resultsContainer) resultsContainer.style.display = 'none';
+        if (emptyPrompt) emptyPrompt.style.display = 'block';
+
+        // Populate selects with available snapshots
+        let snapshots = this._snapshotsCache;
+        if (!snapshots || snapshots.length === 0) {
+            try {
+                const archives = await api.getArchives();
+                if (archives.success && archives.archives) {
+                    snapshots = archives.archives;
+                    this._snapshotsCache = snapshots;
+                }
+            } catch (e) {}
+        }
+
+        if (snapshots && snapshots.length > 0) {
+            const sorted = [...snapshots].sort((a, b) => new Date(b.start) - new Date(a.start));
+            let optionsHtml = '';
+            for (const s of sorted) {
+                const dateStr = s.start ? new Date(s.start).toLocaleString('de-DE') : '';
+                const tagStr = Array.isArray(s.tags) && s.tags.length > 0 ? ` [${s.tags.join(', ')}]` : '';
+                optionsHtml += `<option value="${UI.escapeHtml(s.name)}">${UI.escapeHtml(s.name)} (${dateStr})${UI.escapeHtml(tagStr)}</option>`;
+            }
+            if (snap1Select) {
+                snap1Select.innerHTML = optionsHtml;
+                if (sorted.length > 1) snap1Select.selectedIndex = 1;
+            }
+            if (snap2Select) {
+                snap2Select.innerHTML = optionsHtml;
+                if (sorted.length > 0) snap2Select.selectedIndex = 0;
+            }
+        }
+
+        document.getElementById('diff-modal').style.display = 'flex';
+    },
+
+    closeDiffModal() {
+        document.getElementById('diff-modal').style.display = 'none';
+    },
+
+    async runSnapshotDiff() {
+        const snap1 = document.getElementById('diff-select-snap1').value;
+        const snap2 = document.getElementById('diff-select-snap2').value;
+
+        if (!snap1 || !snap2) {
+            UI.showToast('Bitte zwei Snapshots auswählen.', 'error');
+            return;
+        }
+
+        if (snap1 === snap2) {
+            UI.showToast('Bitte zwei unterschiedliche Snapshots zum Vergleichen auswählen.', 'info');
+            return;
+        }
+
+        const loading = document.getElementById('diff-loading');
+        const emptyPrompt = document.getElementById('diff-empty-prompt');
+        const summaryRow = document.getElementById('diff-summary-row');
+        const tabsBar = document.getElementById('diff-filter-tabs');
+        const resultsContainer = document.getElementById('diff-results-container');
+
+        if (emptyPrompt) emptyPrompt.style.display = 'none';
+        if (resultsContainer) resultsContainer.style.display = 'none';
+        if (loading) loading.style.display = 'block';
+
+        try {
+            const res = await api.diffSnapshots(snap1, snap2);
+            if (loading) loading.style.display = 'none';
+
+            if (res.success) {
+                this._diffData = res;
+                this._currentDiffTab = 'all';
+
+                const addedCount = (res.added || []).length;
+                const modCount = (res.modified || []).length;
+                const remCount = (res.removed || []).length;
+                const totalCount = addedCount + modCount + remCount;
+
+                document.getElementById('diff-count-added').innerText = addedCount;
+                document.getElementById('diff-count-modified').innerText = modCount;
+                document.getElementById('diff-count-removed').innerText = remCount;
+
+                document.getElementById('diff-tab-count-all').innerText = totalCount;
+                document.getElementById('diff-tab-count-added').innerText = addedCount;
+                document.getElementById('diff-tab-count-modified').innerText = modCount;
+                document.getElementById('diff-tab-count-removed').innerText = remCount;
+
+                if (summaryRow) summaryRow.style.display = 'grid';
+                if (tabsBar) tabsBar.style.display = 'flex';
+                if (resultsContainer) resultsContainer.style.display = 'block';
+
+                this.renderDiffResults();
+            } else {
+                UI.showToast('Fehler beim Vergleichen: ' + (res.error || 'Unbekannt'), 'error');
+                if (emptyPrompt) {
+                    emptyPrompt.style.display = 'block';
+                    emptyPrompt.innerHTML = `<p style="color:var(--accent-red)">Fehler beim Vergleichen: ${UI.escapeHtml(res.error || '')}</p>`;
+                }
+            }
+        } catch (e) {
+            if (loading) loading.style.display = 'none';
+            UI.showToast('Fehler beim Abrufen des Diffs: ' + e.message, 'error');
+        }
+    },
+
+    switchDiffTab(tab) {
+        this._currentDiffTab = tab;
+        const tabBtns = document.querySelectorAll('#diff-filter-tabs .tab-btn');
+        tabBtns.forEach(btn => {
+            if (btn.getAttribute('data-diff-tab') === tab) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        this.renderDiffResults();
+    },
+
+    renderDiffResults() {
+        const tbody = document.getElementById('diff-results-tbody');
+        if (!tbody || !this._diffData) return;
+
+        const { snap1, snap2, added, modified, removed } = this._diffData;
+        let items = [];
+
+        if (this._currentDiffTab === 'all' || this._currentDiffTab === 'added') {
+            for (const p of (added || [])) items.push({ type: 'added', path: p });
+        }
+        if (this._currentDiffTab === 'all' || this._currentDiffTab === 'modified') {
+            for (const p of (modified || [])) items.push({ type: 'modified', path: p });
+        }
+        if (this._currentDiffTab === 'all' || this._currentDiffTab === 'removed') {
+            for (const p of (removed || [])) items.push({ type: 'removed', path: p });
+        }
+
+        if (items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:30px; color:var(--text-muted);">Keine Unterschiede in dieser Kategorie gefunden.</td></tr>`;
+            return;
+        }
+
+        let html = '';
+        for (const item of items) {
+            const isAdded = item.type === 'added';
+            const isMod = item.type === 'modified';
+            const badgeClass = isAdded ? 'added' : (isMod ? 'modified' : 'removed');
+            const badgeText = isAdded ? '➕ Neu' : (isMod ? '✏️ Geändert' : '🗑️ Gelöscht');
+            const targetSnap = isAdded || isMod ? snap2 : snap1;
+
+            html += `
+            <tr class="explorer-row">
+                <td style="text-align:center;"><span class="diff-badge ${badgeClass}">${badgeText}</span></td>
+                <td class="explorer-name">${UI.escapeHtml(item.path)}</td>
+                <td style="text-align:right;">
+                    <button class="explorer-btn" onclick="BorgGuard.openArchive('${UI.escapeHtml(targetSnap)}')" title="Im Explorer ansehen">📂 Explorer</button>
+                </td>
+            </tr>`;
+        }
+        tbody.innerHTML = html;
+    },
+
+    // ─── Global File Search (Feature 2) ─────────────────────────────────
+    openFindModal() {
+        document.getElementById('global-find-input').value = '';
+        document.getElementById('find-empty-prompt').style.display = 'block';
+        document.getElementById('find-results-container').style.display = 'none';
+        document.getElementById('find-loading').style.display = 'none';
+        document.getElementById('find-footer').style.display = 'none';
+        document.getElementById('find-modal').style.display = 'flex';
+        setTimeout(() => document.getElementById('global-find-input').focus(), 50);
+    },
+
+    closeFindModal() {
+        document.getElementById('find-modal').style.display = 'none';
+    },
+
+    async runGlobalFind() {
+        const query = document.getElementById('global-find-input').value.trim();
+        if (!query) {
+            UI.showToast('Bitte einen Suchbegriff eingeben.', 'error');
+            return;
+        }
+
+        const loading = document.getElementById('find-loading');
+        const emptyPrompt = document.getElementById('find-empty-prompt');
+        const resultsContainer = document.getElementById('find-results-container');
+        const tbody = document.getElementById('find-results-tbody');
+        const footer = document.getElementById('find-footer');
+        const countEl = document.getElementById('find-results-count');
+
+        if (emptyPrompt) emptyPrompt.style.display = 'none';
+        if (resultsContainer) resultsContainer.style.display = 'none';
+        if (loading) loading.style.display = 'block';
+        if (footer) footer.style.display = 'none';
+
+        try {
+            const res = await api.findFiles(query);
+            if (loading) loading.style.display = 'none';
+
+            if (res.success) {
+                const results = res.results || [];
+                if (results.length === 0) {
+                    if (emptyPrompt) {
+                        emptyPrompt.style.display = 'block';
+                        emptyPrompt.innerHTML = `<div class="empty-icon">🔍</div><p>Keine Dateien passend zu „<strong>${UI.escapeHtml(query)}</strong>“ in deinen Backups gefunden.</p>`;
+                    }
+                    return;
+                }
+
+                let html = '';
+                for (const item of results) {
+                    const dateStr = item.mtime ? new Date(item.mtime).toLocaleString('de-DE') : '—';
+                    const sizeStr = item.size ? UI.formatBytes(item.size) : '—';
+                    const icon = item.type === 'd' ? '📁' : BorgGuard.getFileIcon(item.name);
+
+                    html += `
+                    <tr class="explorer-row">
+                        <td style="text-align:center;"><span class="explorer-icon">${icon}</span></td>
+                        <td class="explorer-name" title="${UI.escapeHtml(item.path)}">
+                            <strong>${UI.escapeHtml(item.name)}</strong>
+                            <div style="font-size:0.75rem; color:var(--text-muted); word-break:break-all;">${UI.escapeHtml(item.path)}</div>
+                        </td>
+                        <td style="font-family:var(--font-mono); font-size:0.82rem; color:var(--accent-cyan);">
+                            <a onclick="BorgGuard.openArchive('${UI.escapeHtml(item.snapshot)}')" style="cursor:pointer; text-decoration:underline;">${UI.escapeHtml(item.snapshot)}</a>
+                        </td>
+                        <td class="size-cell" style="font-family:var(--font-mono); font-size:0.8rem;">${sizeStr}</td>
+                        <td class="date-cell" style="font-size:0.8rem;">${dateStr}</td>
+                        <td style="text-align:right; white-space:nowrap;">
+                            <button class="explorer-btn" onclick="BorgGuard.openArchive('${UI.escapeHtml(item.snapshot)}')" title="Im Explorer ansehen">📂 Explorer</button>
+                            ${item.type !== 'd' ? `<button class="explorer-btn" onclick="BorgGuard.downloadFile('${UI.escapeHtml(item.snapshot)}', '${UI.escapeHtml(item.path)}')" title="Download">⬇️</button>` : ''}
+                        </td>
+                    </tr>`;
+                }
+
+                if (tbody) tbody.innerHTML = html;
+                if (countEl) countEl.innerText = `${results.length} Fundstellen für „${query}“`;
+                if (resultsContainer) resultsContainer.style.display = 'block';
+                if (footer) footer.style.display = 'flex';
+            } else {
+                UI.showToast('Fehler bei der Suche: ' + (res.error || 'Unbekannt'), 'error');
+            }
+        } catch (e) {
+            if (loading) loading.style.display = 'none';
+            UI.showToast('Fehler beim Suchen: ' + e.message, 'error');
+        }
+    },
+
 
 
     async calculateSnapshotSize(snapshotId) {
