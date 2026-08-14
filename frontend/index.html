@@ -76,6 +76,12 @@
                         <div class="skeleton skeleton-large"></div>
                     </div>
                     <div class="card-detail" id="last-backup-detail">Wird geladen…</div>
+                    <!-- Mini Diff Summary (Auto-Diff nach Backup) -->
+                    <div class="mini-diff-container" id="last-backup-diff" style="display: none;" title="Änderungen zum vorherigen Snapshot (Klick für Detail-Diff)" onclick="BorgGuard.openLatestDiffModal()">
+                        <span class="mini-diff-chip added" id="mini-diff-added" title="Hinzugefügte Dateien">+0 Neu</span>
+                        <span class="mini-diff-chip modified" id="mini-diff-modified" title="Geänderte Dateien">~0 Geändert</span>
+                        <span class="mini-diff-chip removed" id="mini-diff-removed" title="Gelöschte Dateien">-0 Gelöscht</span>
+                    </div>
                 </div>
 
                 <!-- Snapshot Count -->

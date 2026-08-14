@@ -1829,3 +1829,48 @@ body::before {
     border: 1px solid var(--terminal-border);
     border-radius: var(--radius-md);
 }
+
+/* ── Mini Diff Summary inside Snapshot Card ──────────────────────────── */
+.mini-diff-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--terminal-border);
+    cursor: pointer;
+    flex-wrap: wrap;
+    transition: opacity var(--transition-fast);
+}
+
+.mini-diff-container:hover {
+    opacity: 0.85;
+}
+
+.mini-diff-chip {
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.mini-diff-chip.added {
+    background: hsla(155, 70%, 50%, 0.15);
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
+}
+
+.mini-diff-chip.modified {
+    background: hsla(30, 90%, 60%, 0.15);
+    border: 1px solid var(--accent-orange);
+    color: var(--accent-orange);
+}
+
+.mini-diff-chip.removed {
+    background: hsla(0, 80%, 60%, 0.15);
+    border: 1px solid var(--accent-red);
+    color: var(--accent-red);
+}

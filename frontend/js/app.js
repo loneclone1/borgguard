@@ -99,6 +99,22 @@ const BorgGuard = {
                     }
                 }
 
+                // ─── Mini Diff inside Snapshot Card (Auto-Diff nach Backup) ───
+                const diffContainer = document.getElementById('last-backup-diff');
+                const diffAdded = document.getElementById('mini-diff-added');
+                const diffMod = document.getElementById('mini-diff-modified');
+                const diffRem = document.getElementById('mini-diff-removed');
+
+                if (status.latest_diff && status.latest_diff.added !== undefined) {
+                    this._latestBackupDiff = status.latest_diff;
+                    if (diffAdded) diffAdded.innerText = `+${status.latest_diff.added} Neu`;
+                    if (diffMod) diffMod.innerText = `~${status.latest_diff.modified} Geändert`;
+                    if (diffRem) diffRem.innerText = `-${status.latest_diff.removed} Gelöscht`;
+                    if (diffContainer) diffContainer.style.display = 'flex';
+                } else {
+                    if (diffContainer) diffContainer.style.display = 'none';
+                }
+
                 // ─── Current Job → Progress Panel ───
                 if (status.current_job) {
                     UI.renderProgress({
@@ -479,7 +495,23 @@ const BorgGuard = {
 
     // ─── Snapshot Diff (Feature 2) ──────────────────────────────────────
     _diffData: null,
+    _latestBackupDiff: null,
     _currentDiffTab: 'all',
+
+    async openLatestDiffModal() {
+        await this.openDiffModal();
+        if (this._latestBackupDiff) {
+            const snap1Select = document.getElementById('diff-select-snap1');
+            const snap2Select = document.getElementById('diff-select-snap2');
+            if (snap1Select && this._latestBackupDiff.snap_prev) {
+                snap1Select.value = this._latestBackupDiff.snap_prev;
+            }
+            if (snap2Select && this._latestBackupDiff.snap_new) {
+                snap2Select.value = this._latestBackupDiff.snap_new;
+            }
+            await this.runSnapshotDiff();
+        }
+    },
 
     async openDiffModal() {
         const snap1Select = document.getElementById('diff-select-snap1');

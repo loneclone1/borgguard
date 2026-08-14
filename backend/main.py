@@ -27,10 +27,12 @@ from .restic_service import (
     add_repository_to_config,
     unlock_repo as break_lock,
     check_repo as check_integrity,
+    compute_latest_backup_diff,
     create_backup,
     diff_snapshots,
     dump_snapshot_file_stream,
     find_files,
+    get_latest_backup_diff,
     get_latest_dr_report,
     list_snapshot_files,
     list_snapshots,
@@ -229,11 +231,17 @@ async def api_status(username: str = Depends(verify_credentials)):
     if job_manager.current_job:
         current_job = job_manager.current_job.to_dict()
 
+    latest_diff = get_latest_backup_diff()
+    if latest_diff is None and archive_count and archive_count >= 2 and not job_manager.is_busy():
+        # Asynchronously compute diff for existing snapshots if not yet cached
+        asyncio.create_task(compute_latest_backup_diff())
+
     return {
         "status": "ok",
         "last_backup": last_backup,
         "last_backup_cached": cached,
         "archive_count": archive_count,
+        "latest_diff": latest_diff,
         "repository": repo_info,
         "services": services,
         "system_info": system_info,

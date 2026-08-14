@@ -255,8 +255,14 @@ async def create_backup(verbosity: int = 1, job=None, job_manager=None) -> dict:
         # Post-Backup Hooks
         if yaml_config.get("after_backup"):
             if job and job_manager:
-                await job_manager.update_progress(job, phase="Führe Post-Backup Hooks aus…", percent=98)
+                await job_manager.update_progress(job, phase="Führe Post-Backup Hooks aus…", percent=96)
             await run_hook(yaml_config["after_backup"], job_manager, job)
+
+        # Automatic Diff with predecessor snapshot
+        try:
+            await compute_latest_backup_diff(job=job, job_manager=job_manager)
+        except Exception as diff_err:
+            logger.warning(f"Auto-Diff nach Backup fehlgeschlagen: {diff_err}")
 
         return result
 
@@ -399,6 +405,79 @@ async def modify_snapshot_tags(snapshot_id: str, action: str, tags: List[str]) -
 
     res = await run_restic(*cmd_args)
     return res
+
+
+LATEST_DIFF_FILE = Path("/home/jb/borgguard/data/latest_backup_diff.json") if os.path.exists("/home/jb/borgguard") else Path(__file__).resolve().parent.parent / "data" / "latest_backup_diff.json"
+
+
+def get_latest_backup_diff() -> Optional[dict]:
+    """Retrieve the cached diff of the most recent backup."""
+    try:
+        if LATEST_DIFF_FILE.exists():
+            with open(LATEST_DIFF_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
+
+
+def _save_latest_backup_diff(diff_data: dict):
+    """Save the diff of the most recent backup."""
+    try:
+        LATEST_DIFF_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LATEST_DIFF_FILE, "w", encoding="utf-8") as f:
+            json.dump(diff_data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Konnte latest_backup_diff nicht speichern: {e}")
+
+
+async def compute_latest_backup_diff(job=None, job_manager=None) -> Optional[dict]:
+    """Compare the newest snapshot with its predecessor and cache the result."""
+    try:
+        snaps_res = await list_snapshots()
+        if not snaps_res.get("success") or not snaps_res.get("data"):
+            return None
+
+        snaps = sorted(snaps_res["data"], key=lambda x: x.get("start") or "", reverse=True)
+        if len(snaps) < 2:
+            return None
+
+        snap_new = snaps[0]["id"]
+        snap_prev = snaps[1]["id"]
+        short_new = snaps[0].get("short_id", snap_new[:8])
+        short_prev = snaps[1].get("short_id", snap_prev[:8])
+
+        if job and job_manager:
+            await job_manager.update_progress(job, phase="Berechne Änderungen zum vorherigen Snapshot…", percent=97)
+            await job_manager.add_job_output(job, f"> 🔍 Berechne Auto-Diff zwischen Snapshot {short_prev} und {short_new}…")
+
+        diff_res = await diff_snapshots(snap_prev, snap_new)
+        if diff_res.get("success"):
+            added = len(diff_res.get("added", []))
+            modified = len(diff_res.get("modified", []))
+            removed = len(diff_res.get("removed", []))
+            summary_info = {
+                "snap_new": snap_new,
+                "snap_prev": snap_prev,
+                "short_new": short_new,
+                "short_prev": short_prev,
+                "added": added,
+                "modified": modified,
+                "removed": removed,
+                "total_changes": added + modified + removed,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            }
+            _save_latest_backup_diff(summary_info)
+
+            if job and job_manager:
+                await job_manager.add_job_output(
+                    job,
+                    f"> 📊 Auto-Diff: +{added} Neu, ~{modified} Geändert, -{removed} Gelöscht"
+                )
+            return summary_info
+    except Exception as e:
+        logger.warning(f"Fehler bei compute_latest_backup_diff: {e}")
+    return None
 
 
 async def diff_snapshots(snap_id_1: str, snap_id_2: str) -> dict:
