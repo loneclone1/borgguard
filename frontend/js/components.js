@@ -86,7 +86,7 @@ const UI = {
                         <span class="tag-remove" onclick="event.stopPropagation(); BorgGuard.removeSnapshotTag('${safeName}', '${safeTag}')" title="Tag entfernen">×</span>
                     </span>`;
             }
-            tagsHtml += `<button class="explorer-btn" onclick="event.stopPropagation(); BorgGuard.openTagModal('${safeName}', ${this.escapeHtml(JSON.stringify(tags))})" title="Tag hinzufügen" style="padding:1px 6px; font-size:0.7rem; margin-top:2px;">+ Tag</button>`;
+            tagsHtml += `<button class="explorer-btn" onclick="event.stopPropagation(); BorgGuard.openTagModal('${safeName}')" title="Tag hinzufügen" style="padding:1px 6px; font-size:0.7rem; margin-top:2px;">+ Tag</button>`;
 
             html += `
             <tr>
