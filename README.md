@@ -5,6 +5,7 @@ Ein modernes Web-Dashboard zur Überwachung und Steuerung von Borg-Backups über
 ## Features
 
 - 📊 **Dashboard** – Status aller Backups auf einen Blick
+- 🚀 **App Launcher** – Zentrale Startseite (Links zu Immich, ImmichMap, Immich Kiosk, Nextcloud)
 - ▶️ **Backup erstellen** – Manuell per Button auslösen
 - 🔍 **Integritätsprüfung** – Borg `check` direkt aus dem Browser
 - 🧹 **Archive bereinigen** – Alte Snapshots gemäß Retention-Policy entfernen

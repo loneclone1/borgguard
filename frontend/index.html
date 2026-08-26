@@ -199,6 +199,45 @@
             </div>
         </div>
 
+        <!-- ─── App Launcher Panel ──────────────────────────────────── -->
+        <div class="panel panel-full" id="panel-apps">
+            <div class="panel-header">
+                <h2><span class="icon">🚀</span> Meine Apps & Dienste</h2>
+            </div>
+            <div class="panel-body">
+                <div class="app-launcher-grid">
+                    <a href="http://192.168.2.113:2283" target="_blank" class="launcher-card">
+                        <div class="launcher-icon">📸</div>
+                        <div class="launcher-info">
+                            <h3>Immich</h3>
+                            <p>Foto- und Videoverwaltung</p>
+                        </div>
+                    </a>
+                    <a href="http://192.168.2.113:8082" target="_blank" class="launcher-card">
+                        <div class="launcher-icon">🗺️</div>
+                        <div class="launcher-info">
+                            <h3>ImmichMap</h3>
+                            <p>Interaktive Fotokarte</p>
+                        </div>
+                    </a>
+                    <a href="http://192.168.2.113:3000" target="_blank" class="launcher-card">
+                        <div class="launcher-icon">🖼️</div>
+                        <div class="launcher-info">
+                            <h3>Immich Kiosk</h3>
+                            <p>Bilderrahmen-Ansicht</p>
+                        </div>
+                    </a>
+                    <a href="https://nextcloud.local" target="_blank" class="launcher-card">
+                        <div class="launcher-icon">☁️</div>
+                        <div class="launcher-info">
+                            <h3>Nextcloud</h3>
+                            <p>Dateispeicher & Sync</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
         <!-- ─── Logs Panel (full width) ─────────────────────────────── -->
         <div class="panel panel-full" id="panel-logs">
             <div class="panel-header">
@@ -220,7 +259,7 @@
 
         <!-- ─── Footer ──────────────────────────────────────────────── -->
         <footer class="app-footer">
-            <span>BorgGuard by JB v1.2 · Restic Backup Dashboard</span>
+            <span>BorgGuard by JB v1.3 · Restic Backup Dashboard & App Launcher</span>
             <span class="footer-separator">·</span>
             <a href="javascript:void(0)" onclick="BorgGuard.openHelpModal()" class="footer-help-link" title="Dokumentation & Bedienungsanleitung öffnen" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 500;">
                 <span style="font-size: 0.95rem;">📖</span> Anleitung
